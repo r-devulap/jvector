@@ -710,16 +710,33 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         int limit = ByteVector.SPECIES_128.loopBound(baseOffsetsLength);
         var scale = IntVector.zero(IntVector.SPECIES_512).addIndex(dataBase);
 
-        for (; i < limit; i += ByteVector.SPECIES_128.length()) {
-            fromByteSequence(ByteVector.SPECIES_128, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
-                    .reinterpretAsInts()
-                    .add(scale)
-                    .intoArray(convOffsets,0);
+        final var SPEC_B  = ByteVector.SPECIES_128;
+        final var SPEC_I  = IntVector.SPECIES_512;
+        final var SPEC_F  = FloatVector.SPECIES_512;
+        final int VL_F    = SPEC_F.length(); // e.g., 16 lanes on 512-bit floats
 
-            var offset = i * dataBase;
-            sum = sum.add(fromVectorFloat(FloatVector.SPECIES_512, data, offset, convOffsets, 0));
+        // Reuse a small scratch buffer for scalar loads -> contiguous vector load
+        final float[] laneBuf = new float[VL_F];
+
+        for (; i < limit; i += SPEC_B.length()) {
+
+            // 1) Compute the per-lane offsets into `convOffsets` (int[])
+            fromByteSequence(SPEC_B, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset)
+                .convertShape(VectorOperators.B2I, SPEC_I, 0)
+                .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_256)
+                .reinterpretAsInts()
+                .add(scale)
+                .intoArray(convOffsets, 0);
+            // 2) Scalar loads (avoid gather): fill laneBuf with the selected floats
+            int base = i * dataBase; // same base used in your original code
+            for (int l = 0; l < VL_F; l++) {
+                laneBuf[l] = data.get(base + convOffsets[l]);
+            }
+
+            // 3) Create a vector from the contiguous temporary buffer and accumulate
+            FloatVector v = FloatVector.fromArray(SPEC_F, laneBuf, 0);
+            sum = sum.add(v);
+
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);
@@ -738,17 +755,33 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         int limit = ByteVector.SPECIES_64.loopBound(baseOffsetsLength);
         var scale = IntVector.zero(IntVector.SPECIES_256).addIndex(dataBase);
 
-        for (; i < limit; i += ByteVector.SPECIES_64.length()) {
+        final var SPEC_B  = ByteVector.SPECIES_64;
+        final var SPEC_I  = IntVector.SPECIES_256;
+        final var SPEC_F  = FloatVector.SPECIES_256;
+        final int VL_F    = SPEC_F.length(); // e.g., 8 lanes on 256-bit floats
 
-            fromByteSequence(ByteVector.SPECIES_64, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset)
-                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0)
-                    .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_256)
-                    .reinterpretAsInts()
-                    .add(scale)
-                    .intoArray(convOffsets,0);
+        // Reuse a small scratch buffer for scalar loads -> contiguous vector load
+        final float[] laneBuf = new float[VL_F];
 
-            var offset = i * dataBase;
-            sum = sum.add(fromVectorFloat(FloatVector.SPECIES_256, data, offset, convOffsets, 0));
+        for (; i < limit; i += SPEC_B.length()) {
+
+            // 1) Compute the per-lane offsets into `convOffsets` (int[])
+            fromByteSequence(SPEC_B, baseOffsets, i + baseOffsets.offset() + baseOffsetsOffset)
+                .convertShape(VectorOperators.B2I, SPEC_I, 0)
+                .lanewise(VectorOperators.AND, BYTE_TO_INT_MASK_512)
+                .reinterpretAsInts()
+                .add(scale)
+                .intoArray(convOffsets, 0);
+            // 2) Scalar loads (avoid gather): fill laneBuf with the selected floats
+            int base = i * dataBase; // same base used in your original code
+            for (int l = 0; l < VL_F; l++) {
+                laneBuf[l] = data.get(base + convOffsets[l]);
+            }
+
+            // 3) Create a vector from the contiguous temporary buffer and accumulate
+            FloatVector v = FloatVector.fromArray(SPEC_F, laneBuf, 0);
+            sum = sum.add(v);
+
         }
 
         float res = sum.reduceLanes(VectorOperators.ADD);

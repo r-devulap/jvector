@@ -1526,7 +1526,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         }
     }
 
-    public void dotProduct_2x(VectorFloat<?> partialSums, int partialSumsOffset, VectorFloat<?> codebook, int codebookOffset, VectorFloat<?> query, int queryOffset, int size) {
+    private void dotProduct_2x(VectorFloat<?> partialSums, int partialSumsOffset, VectorFloat<?> codebook, int codebookOffset, VectorFloat<?> query, int queryOffset, int size) {
         final VectorSpecies<Float> species = FloatVector.SPECIES_PREFERRED;
         final int stride = species.length();
         FloatVector sum0 = FloatVector.zero(species);
@@ -1559,7 +1559,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         partialSums.set(partialSumsOffset + 1, s1);
     }
 
-    public void squareDistance_2x(VectorFloat<?> partialSums, int partialSumsOffset, VectorFloat<?> codebook, int codebookOffset, VectorFloat<?> query, int queryOffset, int size) {
+    private void squareDistance_2x(VectorFloat<?> partialSums, int partialSumsOffset, VectorFloat<?> codebook, int codebookOffset, VectorFloat<?> query, int queryOffset, int size) {
         final VectorSpecies<Float> species = FloatVector.SPECIES_PREFERRED;
         final int stride = species.length();
         FloatVector sum0 = FloatVector.zero(species);
@@ -1597,32 +1597,36 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         partialSums.set(partialSumsOffset + 1, s1);
     }
 
+    private void calculatePartialSumsDot(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorFloat<?> partialSums) {
+        int i = 0;
+        // Process 2 codebook entries at a time.
+        for (; i + 2 <= clusterCount; i += 2) {
+            dotProduct_2x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
+        }
+        // Process any remainder one at a time.
+        for (; i < clusterCount; i++) {
+            partialSums.set(codebookBase + i, dotProduct(codebook, i * size, query, queryOffset, size));
+        }
+    }
+
+    private void calculatePartialSumsEuclidean(VectorFloat<?> codebook, int codebookBase, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorFloat<?> partialSums) {
+        int i = 0;
+        // Process 2 codebook entries at a time.
+        for (; i + 2 <= clusterCount; i += 2) {
+            squareDistance_2x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
+        }
+        // Process any remainder one at a time.
+        for (; i < clusterCount; i++) {
+            partialSums.set(codebookBase + i, squareDistance(codebook, i * size, query, queryOffset, size));
+        }
+    }
+
     @Override
-    public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
+    public final void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
         int codebookBase = codebookIndex * clusterCount;
         switch (vsf) {
-            case DOT_PRODUCT -> {
-                int i = 0;
-                // Process 4 at a time:
-                for (; i + 2 <= clusterCount; i += 2) {
-                    dotProduct_2x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
-                }
-                // remaining one at a time:
-                for (; i < clusterCount; i++) {
-                    partialSums.set(codebookBase + i, dotProduct(codebook, i * size, query, queryOffset, size));
-                }
-            }
-            case EUCLIDEAN -> {
-                int i = 0;
-                // Process 4 at a time:
-                for (; i + 2 <= clusterCount; i += 2) {
-                    squareDistance_2x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
-                }
-                // remaining one at a time:
-                for (; i < clusterCount; i++) {
-                    partialSums.set(codebookBase + i, squareDistance(codebook, i * size, query, queryOffset, size));
-                }
-            }
+            case DOT_PRODUCT -> calculatePartialSumsDot(codebook, codebookBase, size, clusterCount, query, queryOffset, partialSums);
+            case EUCLIDEAN -> calculatePartialSumsEuclidean(codebook, codebookBase, size, clusterCount, query, queryOffset, partialSums);
             default -> throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
         }
     }

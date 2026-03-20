@@ -1528,6 +1528,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     public void dotProduct_4x(VectorFloat<?> partialSums, int partialSumsOffset, VectorFloat<?> codebook, int codebookOffset, VectorFloat<?> query, int queryOffset, int size) {
         final VectorSpecies<Float> species = FloatVector.SPECIES_PREFERRED;
+        final int stride = species.length();
         FloatVector sum0 = FloatVector.zero(species);
         FloatVector sum1 = sum0;
         FloatVector sum2 = sum0;
@@ -1535,13 +1536,23 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
         final int vectorizedLength = species.loopBound(size);
         int i = 0;
-        for (; i < vectorizedLength; i += species.length()) {
-            FloatVector q = fromVectorFloat(species, query, queryOffset + i);
+        int queryPos = queryOffset;
+        int codebookPos0 = codebookOffset;
+        int codebookPos1 = codebookOffset + size;
+        int codebookPos2 = codebookOffset + 2 * size;
+        int codebookPos3 = codebookOffset + 3 * size;
+        for (; i < vectorizedLength; i += stride) {
+            FloatVector q = fromVectorFloat(species, query, queryPos);
             // Use fma:
-            sum0 = q.fma(fromVectorFloat(species, codebook, codebookOffset + i), sum0);
-            sum1 = q.fma(fromVectorFloat(species, codebook, codebookOffset + 1 * size + i), sum1);
-            sum2 = q.fma(fromVectorFloat(species, codebook, codebookOffset + 2 * size + i), sum2);
-            sum3 = q.fma(fromVectorFloat(species, codebook, codebookOffset + 3 * size + i), sum3);
+            sum0 = q.fma(fromVectorFloat(species, codebook, codebookPos0), sum0);
+            sum1 = q.fma(fromVectorFloat(species, codebook, codebookPos1), sum1);
+            sum2 = q.fma(fromVectorFloat(species, codebook, codebookPos2), sum2);
+            sum3 = q.fma(fromVectorFloat(species, codebook, codebookPos3), sum3);
+            queryPos += stride;
+            codebookPos0 += stride;
+            codebookPos1 += stride;
+            codebookPos2 += stride;
+            codebookPos3 += stride;
         }
         float s0 = sum0.reduceLanes(VectorOperators.ADD);
         float s1 = sum1.reduceLanes(VectorOperators.ADD);
@@ -1564,6 +1575,7 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     public void squareDistance_4x(VectorFloat<?> partialSums, int partialSumsOffset, VectorFloat<?> codebook, int codebookOffset, VectorFloat<?> query, int queryOffset, int size) {
         final VectorSpecies<Float> species = FloatVector.SPECIES_PREFERRED;
+        final int stride = species.length();
         FloatVector sum0 = FloatVector.zero(species);
         FloatVector sum1 = sum0;
         FloatVector sum2 = sum0;
@@ -1571,16 +1583,26 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
         final int vectorizedLength = species.loopBound(size);
         int i = 0;
-        for (; i < vectorizedLength; i += species.length()) {
-            FloatVector q = fromVectorFloat(species, query, queryOffset + i);
-            FloatVector diff0 = q.sub(fromVectorFloat(species, codebook, codebookOffset + i));
-            FloatVector diff1 = q.sub(fromVectorFloat(species, codebook, codebookOffset + 1 * size + i));
-            FloatVector diff2 = q.sub(fromVectorFloat(species, codebook, codebookOffset + 2 * size + i));
-            FloatVector diff3 = q.sub(fromVectorFloat(species, codebook, codebookOffset + 3 * size + i));
+        int queryPos = queryOffset;
+        int codebookPos0 = codebookOffset;
+        int codebookPos1 = codebookOffset + size;
+        int codebookPos2 = codebookOffset + 2 * size;
+        int codebookPos3 = codebookOffset + 3 * size;
+        for (; i < vectorizedLength; i += stride) {
+            FloatVector q = fromVectorFloat(species, query, queryPos);
+            FloatVector diff0 = q.sub(fromVectorFloat(species, codebook, codebookPos0));
+            FloatVector diff1 = q.sub(fromVectorFloat(species, codebook, codebookPos1));
+            FloatVector diff2 = q.sub(fromVectorFloat(species, codebook, codebookPos2));
+            FloatVector diff3 = q.sub(fromVectorFloat(species, codebook, codebookPos3));
             sum0 = diff0.fma(diff0, sum0);
             sum1 = diff1.fma(diff1, sum1);
             sum2 = diff2.fma(diff2, sum2);
             sum3 = diff3.fma(diff3, sum3);
+            queryPos += stride;
+            codebookPos0 += stride;
+            codebookPos1 += stride;
+            codebookPos2 += stride;
+            codebookPos3 += stride;
         }
         float s0 = sum0.reduceLanes(VectorOperators.ADD);
         float s1 = sum1.reduceLanes(VectorOperators.ADD);
@@ -1611,36 +1633,31 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     @Override
     public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
-        // print size and cluster count to verify they are what we expect
         int codebookBase = codebookIndex * clusterCount;
-        int i = 0, numRemaining = clusterCount;
-        // Process 4 at a time:
-        while (numRemaining >= 4)  {
-            numRemaining -= 4;
-            for (; i < clusterCount; i += 4) {
-                switch (vsf) {
-                    case DOT_PRODUCT -> {
-                        dotProduct_4x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
-                    }
-                    case EUCLIDEAN -> {
-                        squareDistance_4x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
-                    }
-                    default -> throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
+        switch (vsf) {
+            case DOT_PRODUCT -> {
+                int i = 0;
+                // Process 4 at a time:
+                for (; i + 4 <= clusterCount; i += 4) {
+                    dotProduct_4x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
+                }
+                // remaining one at a time:
+                for (; i < clusterCount; i++) {
+                    partialSums.set(codebookBase + i, dotProduct(codebook, i * size, query, queryOffset, size));
                 }
             }
-        }
-        // remaming one at a time:
-        for (; i < clusterCount; i++) {
-            switch (vsf) {
-                case DOT_PRODUCT:
-                    partialSums.set(codebookBase + i, dotProduct(codebook, i * size, query, queryOffset, size));
-                    break;
-                case EUCLIDEAN:
+            case EUCLIDEAN -> {
+                int i = 0;
+                // Process 4 at a time:
+                for (; i + 4 <= clusterCount; i += 4) {
+                    squareDistance_4x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
+                }
+                // remaining one at a time:
+                for (; i < clusterCount; i++) {
                     partialSums.set(codebookBase + i, squareDistance(codebook, i * size, query, queryOffset, size));
-                    break;
-                default:
-                    throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
+                }
             }
+            default -> throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
         }
     }
 

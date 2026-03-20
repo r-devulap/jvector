@@ -1526,109 +1526,75 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
         }
     }
 
-    public void dotProduct_4x(VectorFloat<?> partialSums, int partialSumsOffset, VectorFloat<?> codebook, int codebookOffset, VectorFloat<?> query, int queryOffset, int size) {
+    public void dotProduct_2x(VectorFloat<?> partialSums, int partialSumsOffset, VectorFloat<?> codebook, int codebookOffset, VectorFloat<?> query, int queryOffset, int size) {
         final VectorSpecies<Float> species = FloatVector.SPECIES_PREFERRED;
         final int stride = species.length();
         FloatVector sum0 = FloatVector.zero(species);
         FloatVector sum1 = sum0;
-        FloatVector sum2 = sum0;
-        FloatVector sum3 = sum0;
 
         final int vectorizedLength = species.loopBound(size);
         int i = 0;
         int queryPos = queryOffset;
         int codebookPos0 = codebookOffset;
         int codebookPos1 = codebookOffset + size;
-        int codebookPos2 = codebookOffset + 2 * size;
-        int codebookPos3 = codebookOffset + 3 * size;
         for (; i < vectorizedLength; i += stride) {
             FloatVector q = fromVectorFloat(species, query, queryPos);
             // Use fma:
             sum0 = q.fma(fromVectorFloat(species, codebook, codebookPos0), sum0);
             sum1 = q.fma(fromVectorFloat(species, codebook, codebookPos1), sum1);
-            sum2 = q.fma(fromVectorFloat(species, codebook, codebookPos2), sum2);
-            sum3 = q.fma(fromVectorFloat(species, codebook, codebookPos3), sum3);
             queryPos += stride;
             codebookPos0 += stride;
             codebookPos1 += stride;
-            codebookPos2 += stride;
-            codebookPos3 += stride;
         }
         float s0 = sum0.reduceLanes(VectorOperators.ADD);
         float s1 = sum1.reduceLanes(VectorOperators.ADD);
-        float s2 = sum2.reduceLanes(VectorOperators.ADD);
-        float s3 = sum3.reduceLanes(VectorOperators.ADD);
         // tail:
         for (; i < size; i++) {
             float q = query.get(queryOffset + i);
             s0 += q * codebook.get(codebookOffset + i);
             s1 += q * codebook.get(codebookOffset + 1 * size + i);
-            s2 += q * codebook.get(codebookOffset + 2 * size + i);
-            s3 += q * codebook.get(codebookOffset + 3 * size + i);
         }
 
         partialSums.set(partialSumsOffset, s0);
         partialSums.set(partialSumsOffset + 1, s1);
-        partialSums.set(partialSumsOffset + 2, s2);
-        partialSums.set(partialSumsOffset + 3, s3);
     }
 
-    public void squareDistance_4x(VectorFloat<?> partialSums, int partialSumsOffset, VectorFloat<?> codebook, int codebookOffset, VectorFloat<?> query, int queryOffset, int size) {
+    public void squareDistance_2x(VectorFloat<?> partialSums, int partialSumsOffset, VectorFloat<?> codebook, int codebookOffset, VectorFloat<?> query, int queryOffset, int size) {
         final VectorSpecies<Float> species = FloatVector.SPECIES_PREFERRED;
         final int stride = species.length();
         FloatVector sum0 = FloatVector.zero(species);
         FloatVector sum1 = sum0;
-        FloatVector sum2 = sum0;
-        FloatVector sum3 = sum0;
 
         final int vectorizedLength = species.loopBound(size);
         int i = 0;
         int queryPos = queryOffset;
         int codebookPos0 = codebookOffset;
         int codebookPos1 = codebookOffset + size;
-        int codebookPos2 = codebookOffset + 2 * size;
-        int codebookPos3 = codebookOffset + 3 * size;
         for (; i < vectorizedLength; i += stride) {
             FloatVector q = fromVectorFloat(species, query, queryPos);
             FloatVector diff0 = q.sub(fromVectorFloat(species, codebook, codebookPos0));
             FloatVector diff1 = q.sub(fromVectorFloat(species, codebook, codebookPos1));
-            FloatVector diff2 = q.sub(fromVectorFloat(species, codebook, codebookPos2));
-            FloatVector diff3 = q.sub(fromVectorFloat(species, codebook, codebookPos3));
             sum0 = diff0.fma(diff0, sum0);
             sum1 = diff1.fma(diff1, sum1);
-            sum2 = diff2.fma(diff2, sum2);
-            sum3 = diff3.fma(diff3, sum3);
             queryPos += stride;
             codebookPos0 += stride;
             codebookPos1 += stride;
-            codebookPos2 += stride;
-            codebookPos3 += stride;
         }
         float s0 = sum0.reduceLanes(VectorOperators.ADD);
         float s1 = sum1.reduceLanes(VectorOperators.ADD);
-        float s2 = sum2.reduceLanes(VectorOperators.ADD);
-        float s3 = sum3.reduceLanes(VectorOperators.ADD);
         // tail:
         for (; i < size; i++) {
             float q = query.get(queryOffset + i);
             float c0 = codebook.get(codebookOffset + i);
             float c1 = codebook.get(codebookOffset + 1 * size + i);
-            float c2 = codebook.get(codebookOffset + 2 * size + i);
-            float c3 = codebook.get(codebookOffset + 3 * size + i);
 
             float qMinusC0 = q - c0;
             float qMinusC1 = q - c1;
-            float qMinusC2 = q - c2;
-            float qMinusC3 = q - c3;
             s0 += qMinusC0 * qMinusC0;
             s1 += qMinusC1 * qMinusC1;
-            s2 += qMinusC2 * qMinusC2;
-            s3 += qMinusC3 * qMinusC3;
         }
         partialSums.set(partialSumsOffset, s0);
         partialSums.set(partialSumsOffset + 1, s1);
-        partialSums.set(partialSumsOffset + 2, s2);
-        partialSums.set(partialSumsOffset + 3, s3);
     }
 
     @Override
@@ -1638,8 +1604,8 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             case DOT_PRODUCT -> {
                 int i = 0;
                 // Process 4 at a time:
-                for (; i + 4 <= clusterCount; i += 4) {
-                    dotProduct_4x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
+                for (; i + 2 <= clusterCount; i += 2) {
+                    dotProduct_2x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
                 }
                 // remaining one at a time:
                 for (; i < clusterCount; i++) {
@@ -1649,8 +1615,8 @@ class PanamaVectorUtilSupport implements VectorUtilSupport {
             case EUCLIDEAN -> {
                 int i = 0;
                 // Process 4 at a time:
-                for (; i + 4 <= clusterCount; i += 4) {
-                    squareDistance_4x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
+                for (; i + 2 <= clusterCount; i += 2) {
+                    squareDistance_2x(partialSums, codebookBase + i, codebook, i * size, query, queryOffset, size);
                 }
                 // remaining one at a time:
                 for (; i < clusterCount; i++) {

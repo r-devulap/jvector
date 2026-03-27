@@ -345,8 +345,42 @@ float pq_decoded_cosine_similarity_f32_512(const unsigned char* baseOffsets, int
 
 void calculate_partial_sums_dot_f32_512(const float* codebook, int codebookIndex, int size, int clusterCount, const float* query, int queryOffset, float* partialSums) {
     int codebookBase = codebookIndex * clusterCount;
-    for (int i = 0; i < clusterCount; i++) {
-      partialSums[codebookBase + i] = dot_product_f32(512, codebook, i * size, query, queryOffset, size);
+    float tempdat[16];
+    //if (size == 4) {
+    //    // use a zmm register to calculate 4 partial sums in parallel:
+    //}
+    if (size == 8) {
+        // use a zmm register to calculate 2 partial sums in parallel:
+        __m256 q = _mm256_loadu_ps(query + queryOffset);
+        __m512 qq = _mm512_broadcast_f32x8(q); // 8 cycles, but have to do it just once outside the loop
+        for (int i = 0; i < clusterCount; i=i+2) {
+            // load two consecutive centroids from the codebook into zmm
+            __m512 c1 = _mm512_loadu_ps(codebookBase + i * size);
+            __m512 sum = _mm512_fmadd_ps(c1, qq, _mm512_setzero_ps());
+            // horizontal reduce: per 256 bit lanes
+            // Step 1: swap neighbouring 128 bits and add to sum across lanes
+            __m512 temp = _mm512_shuffle_f32x4(sum, sum, _MM_SHUFFLE(1, 0, 3, 2)); // swap 128-bit lanes
+            sum = _mm512_add_ps(sum, temp);
+            // Step 2: Shuffle and add to sum within lanes
+            temp = _mm512_shuffle_ps(sum, sum, _MM_SHUFFLE(1, 0, 3, 2));
+            sum = _mm512_add_ps(sum, temp);
+            // step 3: shuffle neighboring lanes:
+            temp = _mm512_shuffle_ps(sum, sum, _MM_SHUFFLE(2, 3, 0, 1));
+            sum = _mm512_add_ps(sum, temp);
+            // extract results: may be there is a better way?
+            // Store is cheap and loading them should happen from the store buffers, so this may be faster than shuffling and extracting:
+            // Although its tempting, avoid using vcompress (a high latency instruction)
+            //_mm512_mask_compressstoreu_ps(ans, 0x8080, sum);
+            _mm512_storeu_ps(tempdat, sum);
+            partialSums[codebookBase + i] = tempdat[0];
+            partialSums[codebookBase + i + 1] = tempdat[8];
+        }
+        // TODO: clusterCount may be odd, so we may have one more to calculate:
+    }
+    else {
+        for (int i = 0; i < clusterCount; i++) {
+          partialSums[codebookBase + i] = dot_product_f32(512, codebook, i * size, query, queryOffset, size);
+        }
     }
 }
 

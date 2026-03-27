@@ -343,7 +343,7 @@ float pq_decoded_cosine_similarity_f32_512(const unsigned char* baseOffsets, int
     return sumResult / sqrtf(aMagnitudeResult * bMagnitude);
 }
 
-void calculate_partial_sums_dot_f32_512(const float* codebook, int codebookIndex, int size, int clusterCount, const float* query, int queryOffset, float* partialSums) {
+JVECTOR_INLINE void calculate_partial_sums_dot_f32_512(const float* codebook, int codebookIndex, int size, int clusterCount, const float* query, int queryOffset, float* partialSums) {
     int codebookBase = codebookIndex * clusterCount;
     float tempdat[16];
     //if (size == 4) {
@@ -391,7 +391,7 @@ JVECTOR_INLINE void calculate_partial_sums_euclidean_f32_512(const float* codebo
     }
 }
 
-JVECTOR_INLINE void calculate_partial_sums_f32_512(const float* codebook, int codebookIndex, int size, int clusterCount, const float* query, int queryOffset, int similarityFunction, float* partialSums) {
+void calculate_partial_sums_f32_512(const float* codebook, int codebookIndex, int size, int clusterCount, const float* query, int queryOffset, int similarityFunction, float* partialSums) {
     switch (similarityFunction) {
         case 0:
             calculate_partial_sums_euclidean_f32_512(codebook, codebookIndex, size, clusterCount, query, queryOffset, partialSums);

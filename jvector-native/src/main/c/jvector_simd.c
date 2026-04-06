@@ -320,6 +320,15 @@ JV_INLINE void calculate_partial_sums_dot_f32_512(const float* codebook, int cod
           partialSums[codebookBase + i] = dot_product_f32(codebook, i * size, query, queryOffset, size);
         }
     }
+    else if (size == 16) {
+        int i = 0;
+        __m512 q = _mm512_loadu_ps(query + queryOffset);
+        for (; i < clusterCount; i += 1) {
+            __m512 c1 = _mm512_loadu_ps(codebook + i * size);
+            __m512 sum = _mm512_fmadd_ps(c1, c1, _mm512_setzero_ps());
+            partialSums[codebookBase + i] = _mm512_reduce_add_ps(sum);
+        }
+    }
     else {
         for (int i = 0; i < clusterCount; i++) {
           partialSums[codebookBase + i] = dot_product_f32(codebook, i * size, query, queryOffset, size);
@@ -388,6 +397,16 @@ JV_INLINE void calculate_partial_sums_euclidean_f32_512(const float* codebook, i
         }
         for (; i < clusterCount; i++) {
           partialSums[codebookBase + i] = euclidean_f32(codebook, i * size, query, queryOffset, size);
+        }
+    }
+    else if (size == 16) {
+        int i = 0;
+        __m512 q = _mm512_loadu_ps(query + queryOffset);
+        for (; i < clusterCount; i += 1) {
+            __m512 c1 = _mm512_loadu_ps(codebook + i * size);
+            __m512 diff = _mm512_sub_ps(c1, qq);
+            __m512 sum = _mm512_fmadd_ps(diff, diff, _mm512_setzero_ps());
+            partialSums[codebookBase + i] = _mm512_reduce_add_ps(sum);
         }
     }
     else {

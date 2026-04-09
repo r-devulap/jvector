@@ -847,4 +847,132 @@ public class NativeSimdOps {
             throw new AssertionError("should not reach here", ex$);
         }
     }
+
+    private static class nvq_square_l2_distance_8bit_512 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+                NativeSimdOps.C_FLOAT,
+                NativeSimdOps.C_POINTER,
+                NativeSimdOps.C_INT,
+                NativeSimdOps.C_POINTER,
+                NativeSimdOps.C_FLOAT,
+                NativeSimdOps.C_FLOAT,
+                NativeSimdOps.C_FLOAT,
+                NativeSimdOps.C_FLOAT
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("nvq_square_l2_distance_8bit_512");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * float nvq_square_l2_distance_8bit_512(const float *vector, int length, const unsigned char *quantized, float alpha, float x0, float minValue, float maxValue)
+     * }
+     */
+    public static FunctionDescriptor nvq_square_l2_distance_8bit_512$descriptor() {
+        return nvq_square_l2_distance_8bit_512.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * float nvq_square_l2_distance_8bit_512(const float *vector, int length, const unsigned char *quantized, float alpha, float x0, float minValue, float maxValue)
+     * }
+     */
+    public static MethodHandle nvq_square_l2_distance_8bit_512$handle() {
+        return nvq_square_l2_distance_8bit_512.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * float nvq_square_l2_distance_8bit_512(const float *vector, int length, const unsigned char *quantized, float alpha, float x0, float minValue, float maxValue)
+     * }
+     */
+    public static MemorySegment nvq_square_l2_distance_8bit_512$address() {
+        return nvq_square_l2_distance_8bit_512.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * float nvq_square_l2_distance_8bit_512(const float *vector, int length, const unsigned char *quantized, float alpha, float x0, float minValue, float maxValue)
+     * }
+     */
+    public static float nvq_square_l2_distance_8bit_512(MemorySegment vector, int length, MemorySegment quantized, float alpha, float x0, float minValue, float maxValue) {
+        var mh$ = nvq_square_l2_distance_8bit_512.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("nvq_square_l2_distance_8bit_512", vector, length, quantized, alpha, x0, minValue, maxValue);
+            }
+            return (float)mh$.invokeExact(vector, length, quantized, alpha, x0, minValue, maxValue);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class nvq_dot_product_8bit_512 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+                NativeSimdOps.C_FLOAT,
+                NativeSimdOps.C_POINTER,
+                NativeSimdOps.C_INT,
+                NativeSimdOps.C_POINTER,
+                NativeSimdOps.C_FLOAT,
+                NativeSimdOps.C_FLOAT,
+                NativeSimdOps.C_FLOAT,
+                NativeSimdOps.C_FLOAT
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("nvq_dot_product_8bit_512");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * float nvq_dot_product_8bit_512(const float *vector, int length, const unsigned char *quantized, float alpha, float x0, float minValue, float maxValue)
+     * }
+     */
+    public static FunctionDescriptor nvq_dot_product_8bit_512$descriptor() {
+        return nvq_dot_product_8bit_512.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * float nvq_dot_product_8bit_512(const float *vector, int length, const unsigned char *quantized, float alpha, float x0, float minValue, float maxValue)
+     * }
+     */
+    public static MethodHandle nvq_dot_product_8bit_512$handle() {
+        return nvq_dot_product_8bit_512.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * float nvq_dot_product_8bit_512(const float *vector, int length, const unsigned char *quantized, float alpha, float x0, float minValue, float maxValue)
+     * }
+     */
+    public static MemorySegment nvq_dot_product_8bit_512$address() {
+        return nvq_dot_product_8bit_512.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * float nvq_dot_product_8bit_512(const float *vector, int length, const unsigned char *quantized, float alpha, float x0, float minValue, float maxValue)
+     * }
+     */
+    public static float nvq_dot_product_8bit_512(MemorySegment vector, int length, MemorySegment quantized, float alpha, float x0, float minValue, float maxValue) {
+        var mh$ = nvq_dot_product_8bit_512.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("nvq_dot_product_8bit_512", vector, length, quantized, alpha, x0, minValue, maxValue);
+            }
+            return (float)mh$.invokeExact(vector, length, quantized, alpha, x0, minValue, maxValue);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
 }

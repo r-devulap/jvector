@@ -104,4 +104,22 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         // encoded is a pointer into a PQ chunk - we need to index into it by encodedOffset and provide encodedLength to the native code
         return NativeSimdOps.pq_decoded_cosine_similarity_f32_512(((MemorySegmentByteSequence) encoded).get(), encodedOffset, encodedLength, clusterCount, ((MemorySegmentVectorFloat) partialSums).get(), ((MemorySegmentVectorFloat) aMagnitude).get(), bMagnitude);
     }
+
+    @Override
+    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> quantizedVector,
+                                         float alpha, float x0, float minValue, float maxValue) {
+        return NativeSimdOps.nvq_square_l2_distance_8bit_512(
+                ((MemorySegmentVectorFloat) vector).get(), vector.length(),
+                ((MemorySegmentByteSequence) quantizedVector).get(),
+                alpha, x0, minValue, maxValue);
+    }
+
+    @Override
+    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> quantizedVector,
+                                   float alpha, float x0, float minValue, float maxValue) {
+        return NativeSimdOps.nvq_dot_product_8bit_512(
+                ((MemorySegmentVectorFloat) vector).get(), vector.length(),
+                ((MemorySegmentByteSequence) quantizedVector).get(),
+                alpha, x0, minValue, maxValue);
+    }
 }

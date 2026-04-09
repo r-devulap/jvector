@@ -34,4 +34,8 @@ void calculate_partial_sums_dot_f32_512(const float* codebook, int codebookBase,
 void calculate_partial_sums_euclidean_f32_512(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums);
 void calculate_partial_sums_best_dot_f32_512(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums, float* partialBestDistances);
 void calculate_partial_sums_best_euclidean_f32_512(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums, float* partialBestDistances);
+
+//NVQ 8-bit
+float nvq_square_l2_distance_8bit_512(const float* vector, int length, const unsigned char* quantized, float alpha, float x0, float minValue, float maxValue);
+float nvq_dot_product_8bit_512(const float* vector, int length, const unsigned char* quantized, float alpha, float x0, float minValue, float maxValue);
 #endif

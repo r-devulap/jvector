@@ -545,3 +545,178 @@ void calculate_partial_sums_best_euclidean_f32_512(const float* codebook, int co
     }
     partialBestDistances[codebookIndex] = best;
 }
+
+/* NVQ 8-bit distance functions using AVX-512
+ *
+ * These implement the NVQ dequantization pipeline in native AVX-512 intrinsics:
+ *   1. Unpack quantized bytes (FastLanes layout: 64 bytes -> 4 groups of 16)
+ *   2. Scale into logistic domain: val = byte * logisticScale + logisticBias
+ *   3. Apply logit (inverse logistic): dequantized = logit(val) * invAlpha + x0
+ *   4. Compute dot product or squared L2 distance against the query float vector
+ *
+ * All processing is done in AVX-512; the tail (length % 64) is handled by the
+ * same loop using masked loads (_mm512_maskz_loadu_epi8 / _mm512_maskz_loadu_ps).
+ */
+
+// Forward logistic NQT: sigma(alpha * (value - x0)), vectorized.
+// Matches Java's logisticNQT: 2^temp / (2^temp + 1) where
+//   temp = alpha * (value - x0),
+//   2^temp is approximated as mant * 2^p with p = floor(temp+1),
+//   mant = fma(temp - p, 0.5, 1.0) (linear fit on (-1,0]).
+// Uses vscalefps (vscalef) to compute mant * 2^p without bit manipulation.
+static inline __m512 nvq_logisticNQT_avx512(__m512 value, float alpha, float x0) {
+    __m512 one  = _mm512_set1_ps(1.0f);
+    __m512 temp = _mm512_fmadd_ps(value, _mm512_set1_ps(alpha),
+                                  _mm512_set1_ps(-alpha * x0));
+    // p = floor(temp + 1)  [vrndscaleps via _mm512_floor_ps]
+    __m512 p    = _mm512_floor_ps(_mm512_add_ps(temp, one));
+    // mant = fma(temp - p, 0.5, 1.0): approximates 2^(temp-p) in (0.5, 1]
+    __m512 mant = _mm512_fmadd_ps(_mm512_sub_ps(temp, p), _mm512_set1_ps(0.5f), one);
+    // result = mant * 2^p  [vscalefps]
+    __m512 result = _mm512_scalef_ps(mant, p);
+    return _mm512_div_ps(result, _mm512_add_ps(result, one));
+}
+
+// Inverse logistic (logit) NQT: logit(value) * inverseAlpha + x0, vectorized.
+// Matches Java's logitNQT: result = (m + p) * inverseAlpha + x0 where
+//   z = value / (1 - value),  p = floor(log2(z)),  m = mantissa(z) in [1.0, 2.0).
+// Uses vgetexpps and vgetmantps instead of integer bit manipulation.
+static inline __m512 nvq_logitNQT_avx512(__m512 value, __m512 inverseAlpha, __m512 x0) {
+    __m512 one = _mm512_set1_ps(1.0f);
+    __m512 z   = _mm512_div_ps(value, _mm512_sub_ps(one, value));
+    // p = (biased_exponent >> 23) - 128, matching Java's bit-manipulation which uses
+    // bias 128 instead of the IEEE 754 bias 127. vgetexpps returns the standard
+    // unbiased exponent (bias 127), so subtract 1 to match.  [vgetexpps - 1]
+    __m512 p   = _mm512_sub_ps(_mm512_getexp_ps(z), one);
+    // m = mantissa of z normalized to [1.0, 2.0)  [vgetmantps]
+    __m512 m   = _mm512_getmant_ps(z, _MM_MANT_NORM_1_2, _MM_MANT_SIGN_src);
+    return _mm512_fmadd_ps(_mm512_add_ps(m, p), inverseAlpha, x0);
+}
+
+// Dequantize 16 bytes from a 512-bit register using the FastLanes layout.
+// `part` selects which byte within each int32 lane (0 = lowest byte, 3 = highest).
+static inline __m512 nvq_dequantize8bit_avx512(__m512i bytes, int part,
+                                               __m512 logisticScale, __m512 logisticBias,
+                                               __m512 invScaledAlpha, __m512 scaledX0) {
+    __m512i vals = _mm512_and_epi32(_mm512_srli_epi32(bytes, 8 * part),
+                                    _mm512_set1_epi32(0xff));
+    __m512 arr = _mm512_fmadd_ps(_mm512_cvtepi32_ps(vals), logisticScale, logisticBias);
+    return nvq_logitNQT_avx512(arr, invScaledAlpha, scaledX0);
+}
+
+float nvq_square_l2_distance_8bit_512(const float* vector, int length,
+                                      const unsigned char* quantized,
+                                      float alpha, float x0,
+                                      float minValue, float maxValue) {
+    float delta          = maxValue - minValue;
+    float scaledAlpha    = alpha / delta;
+    float invScaledAlpha = delta / alpha;
+    float scaledX0       = x0 * delta;
+
+    // Compute logisticBias and logisticScale using the same AVX-512 logistic approximation.
+    __attribute__((aligned(16))) float logistic_params[4];
+    _mm_store_ps(logistic_params,
+        _mm512_castps512_ps128(
+            nvq_logisticNQT_avx512(
+                _mm512_set_ps(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0, maxValue, minValue),
+                scaledAlpha, scaledX0)));
+    float logisticBias      = logistic_params[0];
+    float logisticScale_val = (logistic_params[1] - logisticBias) / 255.0f;
+
+    __m512 invScaledAlpha_vec = _mm512_set1_ps(invScaledAlpha);
+    __m512 scaledX0_vec       = _mm512_set1_ps(scaledX0);
+    __m512 logisticScale_vec  = _mm512_set1_ps(logisticScale_val);
+    __m512 logisticBias_vec   = _mm512_set1_ps(logisticBias);
+    __m512 sum                = _mm512_setzero_ps();
+
+    // FastLanes main loop: each 64-byte block is reinterpreted as 16 int32s;
+    // byte j of each int gives one of 4 groups of 16 dequantized values.
+    int vectorizedLength = length - (length % 64);
+    for (int i = 0; i < vectorizedLength; i += 64) {
+        __m512i bytes = _mm512_loadu_si512((const __m512i*)(quantized + i));
+        for (int j = 0; j < 4; j++) {
+            __m512 v2   = nvq_dequantize8bit_avx512(bytes, j,
+                              logisticScale_vec, logisticBias_vec,
+                              invScaledAlpha_vec, scaledX0_vec);
+            __m512 v1   = _mm512_loadu_ps(vector + i + j * 16);
+            __m512 diff = _mm512_sub_ps(v1, v2);
+            sum = _mm512_fmadd_ps(diff, diff, sum);
+        }
+    }
+
+    // Sequential tail: bytes are stored in plain order, not FastLanes transposed.
+    // Use cvtepu8_epi32 to zero-extend 16 sequential bytes to 16 int32s per pass.
+    for (int i = vectorizedLength; i < length; i += 16) {
+        int n = length - i;
+        if (n > 16) n = 16;
+        __mmask16 mask16 = (n >= 16) ? (__mmask16)0xffff
+                                     : (__mmask16)((1U << n) - 1);
+        __m512i vals = _mm512_cvtepu8_epi32(
+                           _mm_maskz_loadu_epi8(mask16, quantized + i));
+        __m512 arr  = _mm512_fmadd_ps(_mm512_cvtepi32_ps(vals),
+                                      logisticScale_vec, logisticBias_vec);
+        __m512 v2   = nvq_logitNQT_avx512(arr, invScaledAlpha_vec, scaledX0_vec);
+        __m512 v1   = _mm512_maskz_loadu_ps(mask16, vector + i);
+        __m512 diff = _mm512_maskz_sub_ps(mask16, v1, v2);
+        sum = _mm512_fmadd_ps(diff, diff, sum);
+    }
+
+    return _mm512_reduce_add_ps(sum);
+}
+
+float nvq_dot_product_8bit_512(const float* vector, int length,
+                                const unsigned char* quantized,
+                                float alpha, float x0,
+                                float minValue, float maxValue) {
+    float delta          = maxValue - minValue;
+    float scaledAlpha    = alpha / delta;
+    float invScaledAlpha = delta / alpha;
+    float scaledX0       = x0 * delta;
+
+    __attribute__((aligned(16))) float logistic_params[4];
+    _mm_store_ps(logistic_params,
+        _mm512_castps512_ps128(
+            nvq_logisticNQT_avx512(
+                _mm512_set_ps(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0, maxValue, minValue),
+                scaledAlpha, scaledX0)));
+    float logisticBias      = logistic_params[0];
+    float logisticScale_val = (logistic_params[1] - logisticBias) / 255.0f;
+
+    __m512 invScaledAlpha_vec = _mm512_set1_ps(invScaledAlpha);
+    __m512 scaledX0_vec       = _mm512_set1_ps(scaledX0);
+    __m512 logisticScale_vec  = _mm512_set1_ps(logisticScale_val);
+    __m512 logisticBias_vec   = _mm512_set1_ps(logisticBias);
+    __m512 sum                = _mm512_setzero_ps();
+
+    // FastLanes main loop: each 64-byte block is reinterpreted as 16 int32s;
+    // byte j of each int gives one of 4 groups of 16 dequantized values.
+    int vectorizedLength = length - (length % 64);
+    for (int i = 0; i < vectorizedLength; i += 64) {
+        __m512i bytes = _mm512_loadu_si512((const __m512i*)(quantized + i));
+        for (int j = 0; j < 4; j++) {
+            __m512 v1 = _mm512_loadu_ps(vector + i + j * 16);
+            __m512 v2 = nvq_dequantize8bit_avx512(bytes, j,
+                            logisticScale_vec, logisticBias_vec,
+                            invScaledAlpha_vec, scaledX0_vec);
+            sum = _mm512_fmadd_ps(v1, v2, sum);
+        }
+    }
+
+    // Sequential tail: bytes are stored in plain order, not FastLanes transposed.
+    // Use cvtepu8_epi32 to zero-extend 16 sequential bytes to 16 int32s per pass.
+    for (int i = vectorizedLength; i < length; i += 16) {
+        int n = length - i;
+        if (n > 16) n = 16;
+        __mmask16 mask16 = (n >= 16) ? (__mmask16)0xffff
+                                     : (__mmask16)((1U << n) - 1);
+        __m512i vals = _mm512_cvtepu8_epi32(
+                           _mm_maskz_loadu_epi8(mask16, quantized + i));
+        __m512 arr  = _mm512_fmadd_ps(_mm512_cvtepi32_ps(vals),
+                                      logisticScale_vec, logisticBias_vec);
+        __m512 v2   = nvq_logitNQT_avx512(arr, invScaledAlpha_vec, scaledX0_vec);
+        __m512 v1   = _mm512_maskz_loadu_ps(mask16, vector + i);
+        sum = _mm512_fmadd_ps(v1, v2, sum);
+    }
+
+    return _mm512_reduce_add_ps(sum);
+}

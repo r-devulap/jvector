@@ -113,20 +113,49 @@ JV_FINLINE float dot_product_f32_512(const float* a, int aoffset, const float* b
     int bo = boffset;
     int alim = aoffset + length;
     int blim = boffset + length;
-    int simd_length = length - (length % 16);
+    // Round down to a multiple of 64 floats (4 x 16-float ZMM registers) for the unrolled loop
+    int simd_length4 = length - (length % 64);
+    // Remaining elements handled one ZMM register at a time
+    int simd_length  = length - (length % 16);
 
-    __m512 sum = _mm512_setzero_ps();
-    for(; ao < aoffset + simd_length; ao += 16, bo += 16) {
-        // Load float32
+    __m512 sum0 = _mm512_setzero_ps();
+    __m512 sum1 = _mm512_setzero_ps();
+    __m512 sum2 = _mm512_setzero_ps();
+    __m512 sum3 = _mm512_setzero_ps();
+
+    // 4x unrolled: process 64 floats per iteration to hide FMA latency
+    for (; ao < aoffset + simd_length4; ao += 64, bo += 64) {
+        __m512 va0 = _mm512_loadu_ps(a + ao);
+        __m512 vb0 = _mm512_loadu_ps(b + bo);
+        sum0 = _mm512_fmadd_ps(va0, vb0, sum0);
+
+        __m512 va1 = _mm512_loadu_ps(a + ao + 16);
+        __m512 vb1 = _mm512_loadu_ps(b + bo + 16);
+        sum1 = _mm512_fmadd_ps(va1, vb1, sum1);
+
+        __m512 va2 = _mm512_loadu_ps(a + ao + 32);
+        __m512 vb2 = _mm512_loadu_ps(b + bo + 32);
+        sum2 = _mm512_fmadd_ps(va2, vb2, sum2);
+
+        __m512 va3 = _mm512_loadu_ps(a + ao + 48);
+        __m512 vb3 = _mm512_loadu_ps(b + bo + 48);
+        sum3 = _mm512_fmadd_ps(va3, vb3, sum3);
+    }
+
+    // Fold the four accumulators
+    sum0 = _mm512_add_ps(sum0, sum1);
+    sum2 = _mm512_add_ps(sum2, sum3);
+    sum0 = _mm512_add_ps(sum0, sum2);
+
+    // Handle remaining full ZMM registers (0-3 iterations)
+    for (; ao < aoffset + simd_length; ao += 16, bo += 16) {
         __m512 va = _mm512_loadu_ps(a + ao);
         __m512 vb = _mm512_loadu_ps(b + bo);
-
-        // Multiply and accumulate
-        sum = _mm512_fmadd_ps(va, vb, sum);
+        sum0 = _mm512_fmadd_ps(va, vb, sum0);
     }
 
     // Horizontal sum of the vector to get dot product
-    dot = _mm512_reduce_add_ps(sum);
+    dot = _mm512_reduce_add_ps(sum0);
 
     for (; ao < alim && bo < blim; ao++, bo++) {
         dot += a[ao] * b[bo];
@@ -739,4 +768,8 @@ void calculate_partial_sums_f32_512(const float* codebook, int codebookIndex, in
         default:
             break;
     }
+}
+
+float dot_product_f32_512_native(const float* a, int aoffset, const float* b, int boffset, int length) {
+    return dot_product_f32_512(a, aoffset, b, boffset, length);
 }

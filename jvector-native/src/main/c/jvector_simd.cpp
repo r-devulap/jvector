@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-#include <immintrin.h>
 #include <inttypes.h>
 #include <math.h>
 #include "jvector_simd.h"
+#include "hwy/highway.h"
+
+namespace hn = hwy::HWY_NAMESPACE;
 
 
 JV_FINLINE float reduce_add_256_ps(__m256 v) {
@@ -108,46 +110,48 @@ JV_FINLINE float dot_product_f32_256(const float* a, int aoffset, const float* b
 }
 
 JV_FINLINE float dot_product_f32_512(const float* a, int aoffset, const float* b, int boffset, int length) {
-    const float* ap = a + aoffset;
-    const float* bp = b + boffset;
+    const hn::ScalableTag<float> d;
+    const size_t N = hn::Lanes(d);
+    const float* HWY_RESTRICT ap = a + aoffset;
+    const float* HWY_RESTRICT bp = b + boffset;
 
-    // 4x unrolled main loop: 4 * 16 = 64 floats per iteration
-    const int stride = 64;
-    __m512 s0 = _mm512_setzero_ps();
-    __m512 s1 = _mm512_setzero_ps();
-    __m512 s2 = _mm512_setzero_ps();
-    __m512 s3 = _mm512_setzero_ps();
+    // 4x unrolled main loop
+    auto s0 = hn::Zero(d);
+    auto s1 = hn::Zero(d);
+    auto s2 = hn::Zero(d);
+    auto s3 = hn::Zero(d);
 
-    int i = 0;
-    for (; i < (length & ~(stride - 1)); i += stride) {
-        s0 = _mm512_fmadd_ps(_mm512_loadu_ps(ap + i),      _mm512_loadu_ps(bp + i),      s0);
-        s1 = _mm512_fmadd_ps(_mm512_loadu_ps(ap + i + 16), _mm512_loadu_ps(bp + i + 16), s1);
-        s2 = _mm512_fmadd_ps(_mm512_loadu_ps(ap + i + 32), _mm512_loadu_ps(bp + i + 32), s2);
-        s3 = _mm512_fmadd_ps(_mm512_loadu_ps(ap + i + 48), _mm512_loadu_ps(bp + i + 48), s3);
+    size_t i = 0;
+    const size_t stride = 4 * N;
+    for (; i + stride <= static_cast<size_t>(length); i += stride) {
+        s0 = hn::MulAdd(hn::LoadU(d, ap + i),        hn::LoadU(d, bp + i),        s0);
+        s1 = hn::MulAdd(hn::LoadU(d, ap + i +   N),  hn::LoadU(d, bp + i +   N),  s1);
+        s2 = hn::MulAdd(hn::LoadU(d, ap + i + 2*N),  hn::LoadU(d, bp + i + 2*N),  s2);
+        s3 = hn::MulAdd(hn::LoadU(d, ap + i + 3*N),  hn::LoadU(d, bp + i + 3*N),  s3);
     }
 
-    // Tree reduce 4 accumulators -> 1
-    s0 = _mm512_add_ps(s0, s1);
-    s2 = _mm512_add_ps(s2, s3);
-    __m512 sum = _mm512_add_ps(s0, s2);
+    // Tree-reduce 4 accumulators -> 1
+    s0 = hn::Add(s0, s1);
+    s2 = hn::Add(s2, s3);
+    auto sum = hn::Add(s0, s2);
 
-    // Non-batched tail: remaining full 16-float chunks
-    for (; i + 16 <= length; i += 16) {
-        sum = _mm512_fmadd_ps(_mm512_loadu_ps(ap + i), _mm512_loadu_ps(bp + i), sum);
+    // Remaining full vectors
+    for (; i + N <= static_cast<size_t>(length); i += N) {
+        sum = hn::MulAdd(hn::LoadU(d, ap + i), hn::LoadU(d, bp + i), sum);
     }
 
-    // Masked tail: zeroed lanes contribute nothing via fmadd
-    const int remaining = length - i;
+    // Masked tail
+    const size_t remaining = static_cast<size_t>(length) - i;
     if (remaining > 0) {
-        const __mmask16 mask = (__mmask16)((1 << remaining) - 1);
-        sum = _mm512_fmadd_ps(
-            _mm512_maskz_loadu_ps(mask, ap + i),
-            _mm512_maskz_loadu_ps(mask, bp + i),
+        const auto mask = hn::FirstN(d, remaining);
+        sum = hn::MulAdd(
+            hn::MaskedLoad(mask, d, ap + i),
+            hn::MaskedLoad(mask, d, bp + i),
             sum
         );
     }
 
-    return _mm512_reduce_add_ps(sum);
+    return hn::ReduceSum(d, sum);
 }
 
 JV_FINLINE float dot_product_f32(const float* a, int aoffset, const float* b, int boffset, int length) {

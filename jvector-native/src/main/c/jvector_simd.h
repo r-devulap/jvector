@@ -31,6 +31,8 @@ float assemble_and_sum_f32_512(const float* data, int dataBase, const unsigned c
 float pq_decoded_cosine_similarity_f32_512(const unsigned char* baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, const float* partialSums, const float* aMagnitude, float bMagnitude);
 void calculate_partial_sums_f32_512(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, int similarityFunction, float* partialSums);
 float dot_product_f32_512_native(const float* a, int aoffset, const float* b, int boffset, int length);
+float cosine_f32_512_native(const float* a, int aoffset, const float* b, int boffset, int length);
+float euclidean_f32_512_native(const float* a, int aoffset, const float* b, int boffset, int length);
 #ifdef __cplusplus
 }
 #endif

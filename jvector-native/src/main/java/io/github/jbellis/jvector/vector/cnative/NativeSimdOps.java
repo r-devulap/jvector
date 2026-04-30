@@ -909,4 +909,64 @@ public class NativeSimdOps {
             throw new AssertionError("should not reach here", ex$);
         }
     }
+
+    private static class euclidean_f32_512_native {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+                NativeSimdOps.C_FLOAT,
+                NativeSimdOps.C_POINTER,
+                NativeSimdOps.C_INT,
+                NativeSimdOps.C_POINTER,
+                NativeSimdOps.C_INT,
+                NativeSimdOps.C_INT
+        );
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("euclidean_f32_512_native");
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * {@snippet lang=c :
+     * float euclidean_f32_512_native(const float *a, int aoffset, const float *b, int boffset, int length)
+     * }
+     */
+    public static float euclidean_f32_512_native(MemorySegment a, int aoffset, MemorySegment b, int boffset, int length) {
+        var mh$ = euclidean_f32_512_native.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("euclidean_f32_512_native", a, aoffset, b, boffset, length);
+            }
+            return (float) mh$.invokeExact(a, aoffset, b, boffset, length);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class cosine_f32_512_native {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+                NativeSimdOps.C_FLOAT,
+                NativeSimdOps.C_POINTER,
+                NativeSimdOps.C_INT,
+                NativeSimdOps.C_POINTER,
+                NativeSimdOps.C_INT,
+                NativeSimdOps.C_INT
+        );
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("cosine_f32_512_native");
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * {@snippet lang=c :
+     * float cosine_f32_512_native(const float *a, int aoffset, const float *b, int boffset, int length)
+     * }
+     */
+    public static float cosine_f32_512_native(MemorySegment a, int aoffset, MemorySegment b, int boffset, int length) {
+        var mh$ = cosine_f32_512_native.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("cosine_f32_512_native", a, aoffset, b, boffset, length);
+            }
+            return (float) mh$.invokeExact(a, aoffset, b, boffset, length);
+        } catch (Throwable ex$) {
+            throw new AssertionError("should not reach here", ex$);
+        }
+    }
 }

@@ -783,66 +783,15 @@ JV_FINLINE float cosine_f32_512(const float* a, int aoffset, const float* b, int
     const float* HWY_RESTRICT ap = a + aoffset;
     const float* HWY_RESTRICT bp = b + boffset;
 
-    // 4x unrolled main loop
-    auto dot0 = hn::Zero(d);
-    auto dot1 = hn::Zero(d);
-    auto dot2 = hn::Zero(d);
-    auto dot3 = hn::Zero(d);
-    auto normA0 = hn::Zero(d);
-    auto normA1 = hn::Zero(d);
-    auto normA2 = hn::Zero(d);
-    auto normA3 = hn::Zero(d);
-    auto normB0 = hn::Zero(d);
-    auto normB1 = hn::Zero(d);
-    auto normB2 = hn::Zero(d);
-    auto normB3 = hn::Zero(d);
+    auto dotSum  = hn::Zero(d);
+    auto normASum = hn::Zero(d);
+    auto normBSum = hn::Zero(d);
 
     int i = 0;
-    const int stride = 4 * N;
-    for (; i + stride <= length; i += stride) {
-        auto a0 = hn::LoadU(d, ap + i);
-        auto b0 = hn::LoadU(d, bp + i);
-        dot0  = hn::MulAdd(a0, b0, dot0);
-        normA0 = hn::MulAdd(a0, a0, normA0);
-        normB0 = hn::MulAdd(b0, b0, normB0);
-
-        auto a1 = hn::LoadU(d, ap + i +   N);
-        auto b1 = hn::LoadU(d, bp + i +   N);
-        dot1  = hn::MulAdd(a1, b1, dot1);
-        normA1 = hn::MulAdd(a1, a1, normA1);
-        normB1 = hn::MulAdd(b1, b1, normB1);
-
-        auto a2 = hn::LoadU(d, ap + i + 2*N);
-        auto b2 = hn::LoadU(d, bp + i + 2*N);
-        dot2  = hn::MulAdd(a2, b2, dot2);
-        normA2 = hn::MulAdd(a2, a2, normA2);
-        normB2 = hn::MulAdd(b2, b2, normB2);
-
-        auto a3 = hn::LoadU(d, ap + i + 3*N);
-        auto b3 = hn::LoadU(d, bp + i + 3*N);
-        dot3  = hn::MulAdd(a3, b3, dot3);
-        normA3 = hn::MulAdd(a3, a3, normA3);
-        normB3 = hn::MulAdd(b3, b3, normB3);
-    }
-
-    // Tree-reduce 4 accumulators -> 1
-    dot0 = hn::Add(dot0, dot1);
-    dot2 = hn::Add(dot2, dot3);
-    auto dotSum = hn::Add(dot0, dot2);
-
-    normA0 = hn::Add(normA0, normA1);
-    normA2 = hn::Add(normA2, normA3);
-    auto normASum = hn::Add(normA0, normA2);
-
-    normB0 = hn::Add(normB0, normB1);
-    normB2 = hn::Add(normB2, normB3);
-    auto normBSum = hn::Add(normB0, normB2);
-
-    // Remaining full vectors
     for (; i + N <= length; i += N) {
         auto ai = hn::LoadU(d, ap + i);
         auto bi = hn::LoadU(d, bp + i);
-        dotSum  = hn::MulAdd(ai, bi, dotSum);
+        dotSum   = hn::MulAdd(ai, bi, dotSum);
         normASum = hn::MulAdd(ai, ai, normASum);
         normBSum = hn::MulAdd(bi, bi, normBSum);
     }
@@ -853,12 +802,12 @@ JV_FINLINE float cosine_f32_512(const float* a, int aoffset, const float* b, int
         const auto mask = hn::FirstN(d, remaining);
         auto ai = hn::MaskedLoad(mask, d, ap + i);
         auto bi = hn::MaskedLoad(mask, d, bp + i);
-        dotSum  = hn::MulAdd(ai, bi, dotSum);
+        dotSum   = hn::MulAdd(ai, bi, dotSum);
         normASum = hn::MulAdd(ai, ai, normASum);
         normBSum = hn::MulAdd(bi, bi, normBSum);
     }
 
-    float dot  = hn::ReduceSum(d, dotSum);
+    float dot   = hn::ReduceSum(d, dotSum);
     float normA = hn::ReduceSum(d, normASum);
     float normB = hn::ReduceSum(d, normBSum);
 

@@ -1,3 +1,6 @@
 [submodule "jvector-native/src/main/c/third_party/highway"]
 	path = jvector-native/src/main/c/third_party/highway
 	url = https://github.com/google/highway.git
+[submodule "jvector-native/src/main/c/third_party/jvector_simd_kernels"]
+	path = jvector-native/src/main/c/third_party/jvector_simd_kernels
+	url = git@github.ibm.com:raghuveer-devulapalli/jvector_simd_kernels.git

@@ -1521,7 +1521,7 @@ public class NativeSimdOps {
         }
     }
 
-    private static class dot_product_f32_native {
+    private static class dot_product_f32 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_POINTER,
@@ -1531,7 +1531,7 @@ public class NativeSimdOps {
             NativeSimdOps.C_LONG
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("dot_product_f32_native");
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("dot_product_f32");
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
     }
@@ -1539,43 +1539,43 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * float dot_product_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float dot_product_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static FunctionDescriptor dot_product_f32_native$descriptor() {
-        return dot_product_f32_native.DESC;
+    public static FunctionDescriptor dot_product_f32$descriptor() {
+        return dot_product_f32.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * float dot_product_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float dot_product_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static MethodHandle dot_product_f32_native$handle() {
-        return dot_product_f32_native.HANDLE;
+    public static MethodHandle dot_product_f32$handle() {
+        return dot_product_f32.HANDLE;
     }
 
     /**
      * Address for:
      * {@snippet lang=c :
-     * float dot_product_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float dot_product_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static MemorySegment dot_product_f32_native$address() {
-        return dot_product_f32_native.ADDR;
+    public static MemorySegment dot_product_f32$address() {
+        return dot_product_f32.ADDR;
     }
 
     /**
      * {@snippet lang=c :
-     * float dot_product_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float dot_product_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static float dot_product_f32_native(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
-        var mh$ = dot_product_f32_native.HANDLE;
+    public static float dot_product_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
+        var mh$ = dot_product_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("dot_product_f32_native", a, aoffset, b, boffset, length);
+                traceDowncall("dot_product_f32", a, aoffset, b, boffset, length);
             }
             return (float)mh$.invokeExact(a, aoffset, b, boffset, length);
         } catch (Throwable ex$) {
@@ -1583,7 +1583,7 @@ public class NativeSimdOps {
         }
     }
 
-    private static class cosine_f32_native {
+    private static class cosine_f32 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_POINTER,
@@ -1593,7 +1593,7 @@ public class NativeSimdOps {
             NativeSimdOps.C_LONG
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("cosine_f32_native");
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("cosine_f32");
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
     }
@@ -1601,43 +1601,43 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * float cosine_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float cosine_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static FunctionDescriptor cosine_f32_native$descriptor() {
-        return cosine_f32_native.DESC;
+    public static FunctionDescriptor cosine_f32$descriptor() {
+        return cosine_f32.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * float cosine_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float cosine_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static MethodHandle cosine_f32_native$handle() {
-        return cosine_f32_native.HANDLE;
+    public static MethodHandle cosine_f32$handle() {
+        return cosine_f32.HANDLE;
     }
 
     /**
      * Address for:
      * {@snippet lang=c :
-     * float cosine_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float cosine_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static MemorySegment cosine_f32_native$address() {
-        return cosine_f32_native.ADDR;
+    public static MemorySegment cosine_f32$address() {
+        return cosine_f32.ADDR;
     }
 
     /**
      * {@snippet lang=c :
-     * float cosine_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float cosine_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static float cosine_f32_native(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
-        var mh$ = cosine_f32_native.HANDLE;
+    public static float cosine_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
+        var mh$ = cosine_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("cosine_f32_native", a, aoffset, b, boffset, length);
+                traceDowncall("cosine_f32", a, aoffset, b, boffset, length);
             }
             return (float)mh$.invokeExact(a, aoffset, b, boffset, length);
         } catch (Throwable ex$) {
@@ -1645,7 +1645,7 @@ public class NativeSimdOps {
         }
     }
 
-    private static class euclidean_f32_native {
+    private static class euclidean_f32 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_POINTER,
@@ -1655,7 +1655,7 @@ public class NativeSimdOps {
             NativeSimdOps.C_LONG
         );
 
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("euclidean_f32_native");
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("euclidean_f32");
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
     }
@@ -1663,43 +1663,43 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * float euclidean_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float euclidean_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static FunctionDescriptor euclidean_f32_native$descriptor() {
-        return euclidean_f32_native.DESC;
+    public static FunctionDescriptor euclidean_f32$descriptor() {
+        return euclidean_f32.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * float euclidean_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float euclidean_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static MethodHandle euclidean_f32_native$handle() {
-        return euclidean_f32_native.HANDLE;
+    public static MethodHandle euclidean_f32$handle() {
+        return euclidean_f32.HANDLE;
     }
 
     /**
      * Address for:
      * {@snippet lang=c :
-     * float euclidean_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float euclidean_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static MemorySegment euclidean_f32_native$address() {
-        return euclidean_f32_native.ADDR;
+    public static MemorySegment euclidean_f32$address() {
+        return euclidean_f32.ADDR;
     }
 
     /**
      * {@snippet lang=c :
-     * float euclidean_f32_native(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
+     * float euclidean_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static float euclidean_f32_native(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
-        var mh$ = euclidean_f32_native.HANDLE;
+    public static float euclidean_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
+        var mh$ = euclidean_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("euclidean_f32_native", a, aoffset, b, boffset, length);
+                traceDowncall("euclidean_f32", a, aoffset, b, boffset, length);
             }
             return (float)mh$.invokeExact(a, aoffset, b, boffset, length);
         } catch (Throwable ex$) {

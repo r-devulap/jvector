@@ -334,19 +334,19 @@ HWY_INLINE float L2SquareDistance(const float *a,
     return L2SquareDistanceImpl(hn::ScalableTag<float>{}, a, b, length);
 }
 
-HWY_FLATTEN float cosine_f32_native(
+HWY_FLATTEN float cosine_f32(
         const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
 {
     return CosineDistance(a, aoffset, b, boffset, length);
 }
 
-HWY_FLATTEN float dot_product_f32_native(
+HWY_FLATTEN float dot_product_f32(
         const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
 {
     return DotProduct(a, aoffset, b, boffset, length);
 }
 
-HWY_FLATTEN float euclidean_f32_native(
+HWY_FLATTEN float euclidean_f32(
         const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
 {
     return L2SquareDistance(a, aoffset, b, boffset, length);

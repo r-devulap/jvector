@@ -35,9 +35,9 @@ void calculate_partial_sums_euclidean_f32(const float* codebook, int codebookBas
 void calculate_partial_sums_dot_f32(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums);
 
 /* Vector similarity kernels */
-float dot_product_f32_native(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
-float cosine_f32_native(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
-float euclidean_f32_native(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
+float dot_product_f32(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
+float cosine_f32(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
+float euclidean_f32(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
 
 /* NVQ kernels */
 void    nvq_quantize_8bit(const float* vector, int length, float alpha, float x0, float minValue, float maxValue, unsigned char* destination);

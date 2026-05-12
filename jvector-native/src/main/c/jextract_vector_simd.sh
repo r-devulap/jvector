@@ -63,19 +63,39 @@ if [ "$(printf '%s\n' "$MIN_GCC_VERSION" "$CURRENT_GPP_VERSION" | sort -V | head
 fi
 
 # Check if the current GCC version is greater than or equal to the minimum required version
-if [ "$(printf '%s\n' "$MIN_GCC_VERSION" "$CURRENT_GPP_VERSION" | sort -V | head -n1)" = "$MIN_GCC_VERSION" ]; then
-    HIGHWAY_INCLUDE="third_party/highway"
-    rm -rf ../resources/libjvector.so
-    g++ -fPIC -O3 -march=skylake-avx512 -std=c++17 -I"${HIGHWAY_INCLUDE}" -c jvector_simd.cpp -o jvector_simd.o
-    g++ -fPIC -O3 -march=x86-64 -std=c++17 -I"${HIGHWAY_INCLUDE}" -c jvector_simd_check.cpp -o jvector_simd_check.o
-    g++ -shared -o ../resources/libjvector.so jvector_simd_check.o jvector_simd.o
-
-    rm -rf jvector_common.o
-    rm -rf jvector_simd.o
-    rm -rf jvector_simd_check.o
-else
+if [ "$(printf '%s\n' "$MIN_GCC_VERSION" "$CURRENT_GPP_VERSION" | sort -V | head -n1)" != "$MIN_GCC_VERSION" ]; then
     echo "WARNING: g++ version $CURRENT_GPP_VERSION is too old. Please upgrade to g++ $MIN_GCC_VERSION or newer."
+    exit 1
 fi
+
+# Check meson and ninja are available
+if ! command -v meson &> /dev/null; then
+    echo "meson is not installed. Please install it: pip install meson  or  sudo apt install meson"
+    exit 2
+fi
+if ! command -v ninja &> /dev/null; then
+    echo "ninja is not installed. Please install it: sudo apt install ninja-build"
+    exit 2
+fi
+
+BUILD_DIR="build"
+rm -rf ../resources/libjvector.so
+
+# Configure (--wipe resets any stale configuration) then compile
+meson setup "${BUILD_DIR}" \
+    --wipe \
+    --buildtype=release
+
+meson compile -C "${BUILD_DIR}"
+
+# The versioned .so (e.g. libjvector.so.0.1.0) is the real file; symlinks point to it.
+# Copy it to ../resources/ as the plain libjvector.so for Java System.load().
+SOFILE=$(find "${BUILD_DIR}" -maxdepth 1 -name 'libjvector.so.*' -type f | head -1)
+if [ -z "${SOFILE}" ]; then
+    echo "ERROR: libjvector.so not found in ${BUILD_DIR} after build."
+    exit 1
+fi
+cp "${SOFILE}" ../resources/libjvector.so
 
 # Generate Java source code
 # Should only be run when c header changes

@@ -1039,7 +1039,7 @@ HWY_FLATTEN void nvq_quantize_8bit(const float *HWY_RESTRICT vector,
     float invLogisticScale = 255.0f / (logisticNQT_scalar(maxValue, scaledAlpha, scaledX0) - logisticBias);
 
     size_t i = 0;
-    for (; i + kLanes <= (size_t)length; i += kLanes) {
+    for (; i + kLanes <= length; i += kLanes) {
         auto arr = hn::LoadU(d_f, vector + i);
         arr = logisticNQT(d_f, arr, scaledAlpha, scaledX0);
         arr = hn::Add(hn::Mul(hn::Sub(arr, hn::Set(d_f, logisticBias)),
@@ -1054,7 +1054,7 @@ HWY_FLATTEN void nvq_quantize_8bit(const float *HWY_RESTRICT vector,
     }
     // Tail: LoadN zero-pads lanes beyond `remaining`; only write the first
     // `remaining` bytes from tmp[] so the padding lanes are never observed.
-    const size_t remaining = (size_t)length - i;
+    const size_t remaining = length - i;
     if (remaining > 0) {
         auto arr = hn::LoadN(d_f, vector + i, remaining);
         arr = logisticNQT(d_f, arr, scaledAlpha, scaledX0);
@@ -1093,7 +1093,7 @@ HWY_FLATTEN float nvq_loss(const float *HWY_RESTRICT vector,
     auto squaredSum = hn::Zero(d_f);
 
     size_t i = 0;
-    for (; i + kLanes <= (size_t)length; i += kLanes) {
+    for (; i + kLanes <= length; i += kLanes) {
         auto arr    = hn::LoadU(d_f, vector + i);
         auto recArr = logisticNQT(d_f, arr, scaledAlpha, scaledX0);
         recArr = hn::Mul(hn::Sub(recArr, hn::Set(d_f, logisticBias)),
@@ -1110,7 +1110,7 @@ HWY_FLATTEN float nvq_loss(const float *HWY_RESTRICT vector,
     float result = hn::ReduceSum(d_f, squaredSum);
 
     // Tail: LoadN zero-pads; mask the diff so padding lanes don't contribute.
-    const size_t remaining = (size_t)length - i;
+    const size_t remaining = length - i;
     if (remaining > 0) {
         const auto mask = hn::FirstN(d_f, remaining);
         auto arr    = hn::LoadN(d_f, vector + i, remaining);
@@ -1145,7 +1145,7 @@ HWY_FLATTEN float nvq_uniform_loss(const float *HWY_RESTRICT vector,
     auto squaredSum = hn::Zero(d_f);
 
     size_t i = 0;
-    for (; i + kLanes <= (size_t)length; i += kLanes) {
+    for (; i + kLanes <= length; i += kLanes) {
         auto arr    = hn::LoadU(d_f, vector + i);
         auto recArr = hn::Mul(hn::Sub(arr, hn::Set(d_f, minValue)),
                               hn::Set(d_f, constant / delta));
@@ -1159,7 +1159,7 @@ HWY_FLATTEN float nvq_uniform_loss(const float *HWY_RESTRICT vector,
     float result = hn::ReduceSum(d_f, squaredSum);
 
     // Tail: LoadN zero-pads; mask the diff so padding lanes don't contribute.
-    const size_t remaining = (size_t)length - i;
+    const size_t remaining = length - i;
     if (remaining > 0) {
         const auto mask = hn::FirstN(d_f, remaining);
         auto arr    = hn::LoadN(d_f, vector + i, remaining);
@@ -1225,7 +1225,7 @@ HWY_FLATTEN float nvq_square_l2_distance_8bit(const float    *HWY_RESTRICT vecto
     auto squaredSum = hn::Zero(d_f);
 
     size_t i = 0;
-    for (; i + kLanes <= (size_t)length; i += kLanes) {
+    for (; i + kLanes <= length; i += kLanes) {
         auto va   = hn::LoadU(d_f, vector + i);
         auto vb   = dequantize_bytes(d_f, d_i, d_u16, d_u8, quantized, i,
                                      logisticScale, logisticBias, invScaledAlpha, scaledX0);
@@ -1237,7 +1237,7 @@ HWY_FLATTEN float nvq_square_l2_distance_8bit(const float    *HWY_RESTRICT vecto
 
     // Tail: LoadN zero-pads both float and byte inputs; mask diff to exclude
     // padding lanes from the squared sum.
-    const size_t remaining = (size_t)length - i;
+    const size_t remaining = length - i;
     if (remaining > 0) {
         const auto mask  = hn::FirstN(d_f, remaining);
         auto va          = hn::LoadN(d_f,  vector    + i, remaining);
@@ -1281,7 +1281,7 @@ HWY_FLATTEN float nvq_dot_product_8bit(const float   *HWY_RESTRICT vector,
     auto dotProd = hn::Zero(d_f);
 
     size_t i = 0;
-    for (; i + kLanes <= (size_t)length; i += kLanes) {
+    for (; i + kLanes <= length; i += kLanes) {
         auto va = hn::LoadU(d_f, vector + i);
         auto vb = dequantize_bytes(d_f, d_i, d_u16, d_u8, quantized, i,
                                    logisticScale, logisticBias, invScaledAlpha, scaledX0);
@@ -1292,7 +1292,7 @@ HWY_FLATTEN float nvq_dot_product_8bit(const float   *HWY_RESTRICT vector,
 
     // Tail: LoadN zero-pads va; 0 * vb = 0 for padding lanes, so no masking
     // is needed — the zero-padded float inputs naturally contribute nothing.
-    const size_t remaining = (size_t)length - i;
+    const size_t remaining = length - i;
     if (remaining > 0) {
         auto va          = hn::LoadN(d_f,  vector    + i, remaining);
         const auto b_u8  = hn::LoadN(d_u8, quantized + i, remaining);
@@ -1340,7 +1340,7 @@ HWY_FLATTEN int64_t nvq_cosine_8bit_packed(const float   *HWY_RESTRICT vector,
     auto bMagVec = hn::Zero(d_f);
 
     size_t i = 0;
-    for (; i + kLanes <= (size_t)length; i += kLanes) {
+    for (; i + kLanes <= length; i += kLanes) {
         auto va = hn::LoadU(d_f, vector   + i);
         auto vc = hn::LoadU(d_f, centroid + i);
         auto vb = dequantize_bytes(d_f, d_i, d_u16, d_u8, quantized, i,
@@ -1356,7 +1356,7 @@ HWY_FLATTEN int64_t nvq_cosine_8bit_packed(const float   *HWY_RESTRICT vector,
     // Tail: LoadN zero-pads va and vc.  Zero out vb for the tail lanes too
     // (via FirstN mask) before adding the centroid, so both sum (va*vb_c)
     // and bMagnitude (vb_c^2) naturally contribute 0 for padding lanes.
-    const size_t remaining = (size_t)length - i;
+    const size_t remaining = length - i;
     if (remaining > 0) {
         const auto mask  = hn::FirstN(d_f, remaining);
         auto va          = hn::LoadN(d_f,  vector    + i, remaining);

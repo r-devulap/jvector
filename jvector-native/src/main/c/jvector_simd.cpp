@@ -155,18 +155,6 @@ static const KernelVTable kernels = dispatch_kernels();
 // Each function is a thin wrapper that forwards to the pre-resolved function
 // pointer in `kernels`.
 
-bool check_avx512_compatibility(void)
-{
-    std::array<bool, static_cast<uint32_t>(CpuFeature::COUNT)> features;
-    populate_cpu_features(features);
-    auto has = [&](CpuFeature f) noexcept {
-        return features[static_cast<uint32_t>(f)];
-    };
-    return has(CpuFeature::AVX512F)  && has(CpuFeature::AVX512BW)
-        && has(CpuFeature::AVX512CD) && has(CpuFeature::AVX512DQ)
-        && has(CpuFeature::AVX512VL);
-}
-
 /* Vector similarity */
 
 float cosine_f32(const float *a, size_t aoffset,

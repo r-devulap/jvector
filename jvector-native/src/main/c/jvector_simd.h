@@ -29,7 +29,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-bool check_avx512_compatibility(void);
 /* PQ kernels */
 JVECTOR_SIMD_API float assemble_and_sum_f32(const float* data, int dataBase, const unsigned char* baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength);
 JVECTOR_SIMD_API float assemble_and_sum_pq_f32(const float* data, size_t subspaceCount, const unsigned char* baseOffsets1, int baseOffsetsOffset1, const unsigned char* baseOffsets2, int baseOffsetsOffset2, int clusterCount);

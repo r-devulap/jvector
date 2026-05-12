@@ -1149,62 +1149,6 @@ public class NativeSimdOps {
      */
     public static final OfLong uintmax_t = NativeSimdOps.C_LONG;
 
-    private static class check_avx512_compatibility {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
-            NativeSimdOps.C_BOOL    );
-
-        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("check_avx512_compatibility");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * bool check_avx512_compatibility()
-     * }
-     */
-    public static FunctionDescriptor check_avx512_compatibility$descriptor() {
-        return check_avx512_compatibility.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * bool check_avx512_compatibility()
-     * }
-     */
-    public static MethodHandle check_avx512_compatibility$handle() {
-        return check_avx512_compatibility.HANDLE;
-    }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * bool check_avx512_compatibility()
-     * }
-     */
-    public static MemorySegment check_avx512_compatibility$address() {
-        return check_avx512_compatibility.ADDR;
-    }
-
-    /**
-     * {@snippet lang=c :
-     * bool check_avx512_compatibility()
-     * }
-     */
-    public static boolean check_avx512_compatibility() {
-        var mh$ = check_avx512_compatibility.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("check_avx512_compatibility");
-            }
-            return (boolean)mh$.invokeExact();
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
     private static class assemble_and_sum_f32 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_FLOAT,

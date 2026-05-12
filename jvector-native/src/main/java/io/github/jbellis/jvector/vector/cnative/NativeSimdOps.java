@@ -1336,7 +1336,7 @@ public class NativeSimdOps {
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_POINTER,
             NativeSimdOps.C_INT,
-            NativeSimdOps.C_INT,
+            NativeSimdOps.C_LONG,
             NativeSimdOps.C_INT,
             NativeSimdOps.C_POINTER,
             NativeSimdOps.C_POINTER,
@@ -1351,7 +1351,7 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * float pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
+     * float pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
      * }
      */
     public static FunctionDescriptor pq_decoded_cosine_similarity_f32$descriptor() {
@@ -1361,7 +1361,7 @@ public class NativeSimdOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * float pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
+     * float pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
      * }
      */
     public static MethodHandle pq_decoded_cosine_similarity_f32$handle() {
@@ -1371,7 +1371,7 @@ public class NativeSimdOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * float pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
+     * float pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
      * }
      */
     public static MemorySegment pq_decoded_cosine_similarity_f32$address() {
@@ -1380,10 +1380,10 @@ public class NativeSimdOps {
 
     /**
      * {@snippet lang=c :
-     * float pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
+     * float pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength, int clusterCount, const float *partialSums, const float *aMagnitude, float bMagnitude)
      * }
      */
-    public static float pq_decoded_cosine_similarity_f32(MemorySegment baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, MemorySegment partialSums, MemorySegment aMagnitude, float bMagnitude) {
+    public static float pq_decoded_cosine_similarity_f32(MemorySegment baseOffsets, int baseOffsetsOffset, long baseOffsetsLength, int clusterCount, MemorySegment partialSums, MemorySegment aMagnitude, float bMagnitude) {
         var mh$ = pq_decoded_cosine_similarity_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1399,7 +1399,7 @@ public class NativeSimdOps {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             NativeSimdOps.C_POINTER,
             NativeSimdOps.C_INT,
-            NativeSimdOps.C_INT,
+            NativeSimdOps.C_LONG,
             NativeSimdOps.C_INT,
             NativeSimdOps.C_POINTER,
             NativeSimdOps.C_INT,
@@ -1414,7 +1414,7 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void calculate_partial_sums_euclidean_f32(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
+     * void calculate_partial_sums_euclidean_f32(const float *codebook, int codebookBase, size_t size, int clusterCount, const float *query, int queryOffset, float *partialSums)
      * }
      */
     public static FunctionDescriptor calculate_partial_sums_euclidean_f32$descriptor() {
@@ -1424,7 +1424,7 @@ public class NativeSimdOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void calculate_partial_sums_euclidean_f32(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
+     * void calculate_partial_sums_euclidean_f32(const float *codebook, int codebookBase, size_t size, int clusterCount, const float *query, int queryOffset, float *partialSums)
      * }
      */
     public static MethodHandle calculate_partial_sums_euclidean_f32$handle() {
@@ -1434,7 +1434,7 @@ public class NativeSimdOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void calculate_partial_sums_euclidean_f32(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
+     * void calculate_partial_sums_euclidean_f32(const float *codebook, int codebookBase, size_t size, int clusterCount, const float *query, int queryOffset, float *partialSums)
      * }
      */
     public static MemorySegment calculate_partial_sums_euclidean_f32$address() {
@@ -1443,10 +1443,10 @@ public class NativeSimdOps {
 
     /**
      * {@snippet lang=c :
-     * void calculate_partial_sums_euclidean_f32(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
+     * void calculate_partial_sums_euclidean_f32(const float *codebook, int codebookBase, size_t size, int clusterCount, const float *query, int queryOffset, float *partialSums)
      * }
      */
-    public static void calculate_partial_sums_euclidean_f32(MemorySegment codebook, int codebookBase, int size, int clusterCount, MemorySegment query, int queryOffset, MemorySegment partialSums) {
+    public static void calculate_partial_sums_euclidean_f32(MemorySegment codebook, int codebookBase, long size, int clusterCount, MemorySegment query, int queryOffset, MemorySegment partialSums) {
         var mh$ = calculate_partial_sums_euclidean_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1462,7 +1462,7 @@ public class NativeSimdOps {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             NativeSimdOps.C_POINTER,
             NativeSimdOps.C_INT,
-            NativeSimdOps.C_INT,
+            NativeSimdOps.C_LONG,
             NativeSimdOps.C_INT,
             NativeSimdOps.C_POINTER,
             NativeSimdOps.C_INT,
@@ -1477,7 +1477,7 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void calculate_partial_sums_dot_f32(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
+     * void calculate_partial_sums_dot_f32(const float *codebook, int codebookBase, size_t size, int clusterCount, const float *query, int queryOffset, float *partialSums)
      * }
      */
     public static FunctionDescriptor calculate_partial_sums_dot_f32$descriptor() {
@@ -1487,7 +1487,7 @@ public class NativeSimdOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void calculate_partial_sums_dot_f32(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
+     * void calculate_partial_sums_dot_f32(const float *codebook, int codebookBase, size_t size, int clusterCount, const float *query, int queryOffset, float *partialSums)
      * }
      */
     public static MethodHandle calculate_partial_sums_dot_f32$handle() {
@@ -1497,7 +1497,7 @@ public class NativeSimdOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void calculate_partial_sums_dot_f32(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
+     * void calculate_partial_sums_dot_f32(const float *codebook, int codebookBase, size_t size, int clusterCount, const float *query, int queryOffset, float *partialSums)
      * }
      */
     public static MemorySegment calculate_partial_sums_dot_f32$address() {
@@ -1506,10 +1506,10 @@ public class NativeSimdOps {
 
     /**
      * {@snippet lang=c :
-     * void calculate_partial_sums_dot_f32(const float *codebook, int codebookBase, int size, int clusterCount, const float *query, int queryOffset, float *partialSums)
+     * void calculate_partial_sums_dot_f32(const float *codebook, int codebookBase, size_t size, int clusterCount, const float *query, int queryOffset, float *partialSums)
      * }
      */
-    public static void calculate_partial_sums_dot_f32(MemorySegment codebook, int codebookBase, int size, int clusterCount, MemorySegment query, int queryOffset, MemorySegment partialSums) {
+    public static void calculate_partial_sums_dot_f32(MemorySegment codebook, int codebookBase, long size, int clusterCount, MemorySegment query, int queryOffset, MemorySegment partialSums) {
         var mh$ = calculate_partial_sums_dot_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1571,7 +1571,7 @@ public class NativeSimdOps {
      * float dot_product_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static float dot_product_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
+    public static float dot_product_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, size_t length) {
         var mh$ = dot_product_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1633,7 +1633,7 @@ public class NativeSimdOps {
      * float cosine_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static float cosine_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
+    public static float cosine_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, size_t length) {
         var mh$ = cosine_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1695,7 +1695,7 @@ public class NativeSimdOps {
      * float euclidean_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static float euclidean_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
+    public static float euclidean_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, size_t length) {
         var mh$ = euclidean_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1710,7 +1710,7 @@ public class NativeSimdOps {
     private static class nvq_quantize_8bit {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             NativeSimdOps.C_POINTER,
-            NativeSimdOps.C_INT,
+            NativeSimdOps.C_LONG,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
@@ -1726,7 +1726,7 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void nvq_quantize_8bit(const float *vector, int length, float alpha, float x0, float minValue, float maxValue, unsigned char *destination)
+     * void nvq_quantize_8bit(const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, unsigned char *destination)
      * }
      */
     public static FunctionDescriptor nvq_quantize_8bit$descriptor() {
@@ -1736,7 +1736,7 @@ public class NativeSimdOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void nvq_quantize_8bit(const float *vector, int length, float alpha, float x0, float minValue, float maxValue, unsigned char *destination)
+     * void nvq_quantize_8bit(const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, unsigned char *destination)
      * }
      */
     public static MethodHandle nvq_quantize_8bit$handle() {
@@ -1746,7 +1746,7 @@ public class NativeSimdOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void nvq_quantize_8bit(const float *vector, int length, float alpha, float x0, float minValue, float maxValue, unsigned char *destination)
+     * void nvq_quantize_8bit(const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, unsigned char *destination)
      * }
      */
     public static MemorySegment nvq_quantize_8bit$address() {
@@ -1755,10 +1755,10 @@ public class NativeSimdOps {
 
     /**
      * {@snippet lang=c :
-     * void nvq_quantize_8bit(const float *vector, int length, float alpha, float x0, float minValue, float maxValue, unsigned char *destination)
+     * void nvq_quantize_8bit(const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, unsigned char *destination)
      * }
      */
-    public static void nvq_quantize_8bit(MemorySegment vector, int length, float alpha, float x0, float minValue, float maxValue, MemorySegment destination) {
+    public static void nvq_quantize_8bit(MemorySegment vector, long length, float alpha, float x0, float minValue, float maxValue, MemorySegment destination) {
         var mh$ = nvq_quantize_8bit.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1774,7 +1774,7 @@ public class NativeSimdOps {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_POINTER,
-            NativeSimdOps.C_INT,
+            NativeSimdOps.C_LONG,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
@@ -1790,7 +1790,7 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * float nvq_loss(const float *vector, int length, float alpha, float x0, float minValue, float maxValue, int nBits)
+     * float nvq_loss(const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, int nBits)
      * }
      */
     public static FunctionDescriptor nvq_loss$descriptor() {
@@ -1800,7 +1800,7 @@ public class NativeSimdOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * float nvq_loss(const float *vector, int length, float alpha, float x0, float minValue, float maxValue, int nBits)
+     * float nvq_loss(const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, int nBits)
      * }
      */
     public static MethodHandle nvq_loss$handle() {
@@ -1810,7 +1810,7 @@ public class NativeSimdOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * float nvq_loss(const float *vector, int length, float alpha, float x0, float minValue, float maxValue, int nBits)
+     * float nvq_loss(const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, int nBits)
      * }
      */
     public static MemorySegment nvq_loss$address() {
@@ -1819,10 +1819,10 @@ public class NativeSimdOps {
 
     /**
      * {@snippet lang=c :
-     * float nvq_loss(const float *vector, int length, float alpha, float x0, float minValue, float maxValue, int nBits)
+     * float nvq_loss(const float *vector, size_t length, float alpha, float x0, float minValue, float maxValue, int nBits)
      * }
      */
-    public static float nvq_loss(MemorySegment vector, int length, float alpha, float x0, float minValue, float maxValue, int nBits) {
+    public static float nvq_loss(MemorySegment vector, long length, float alpha, float x0, float minValue, float maxValue, int nBits) {
         var mh$ = nvq_loss.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1838,7 +1838,7 @@ public class NativeSimdOps {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_POINTER,
-            NativeSimdOps.C_INT,
+            NativeSimdOps.C_LONG,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_INT
@@ -1852,7 +1852,7 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * float nvq_uniform_loss(const float *vector, int length, float minValue, float maxValue, int nBits)
+     * float nvq_uniform_loss(const float *vector, size_t length, float minValue, float maxValue, int nBits)
      * }
      */
     public static FunctionDescriptor nvq_uniform_loss$descriptor() {
@@ -1862,7 +1862,7 @@ public class NativeSimdOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * float nvq_uniform_loss(const float *vector, int length, float minValue, float maxValue, int nBits)
+     * float nvq_uniform_loss(const float *vector, size_t length, float minValue, float maxValue, int nBits)
      * }
      */
     public static MethodHandle nvq_uniform_loss$handle() {
@@ -1872,7 +1872,7 @@ public class NativeSimdOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * float nvq_uniform_loss(const float *vector, int length, float minValue, float maxValue, int nBits)
+     * float nvq_uniform_loss(const float *vector, size_t length, float minValue, float maxValue, int nBits)
      * }
      */
     public static MemorySegment nvq_uniform_loss$address() {
@@ -1881,10 +1881,10 @@ public class NativeSimdOps {
 
     /**
      * {@snippet lang=c :
-     * float nvq_uniform_loss(const float *vector, int length, float minValue, float maxValue, int nBits)
+     * float nvq_uniform_loss(const float *vector, size_t length, float minValue, float maxValue, int nBits)
      * }
      */
-    public static float nvq_uniform_loss(MemorySegment vector, int length, float minValue, float maxValue, int nBits) {
+    public static float nvq_uniform_loss(MemorySegment vector, long length, float minValue, float maxValue, int nBits) {
         var mh$ = nvq_uniform_loss.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1901,7 +1901,7 @@ public class NativeSimdOps {
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_POINTER,
             NativeSimdOps.C_POINTER,
-            NativeSimdOps.C_INT,
+            NativeSimdOps.C_LONG,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
@@ -1916,7 +1916,7 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * float nvq_square_l2_distance_8bit(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue)
+     * float nvq_square_l2_distance_8bit(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue)
      * }
      */
     public static FunctionDescriptor nvq_square_l2_distance_8bit$descriptor() {
@@ -1926,7 +1926,7 @@ public class NativeSimdOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * float nvq_square_l2_distance_8bit(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue)
+     * float nvq_square_l2_distance_8bit(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue)
      * }
      */
     public static MethodHandle nvq_square_l2_distance_8bit$handle() {
@@ -1936,7 +1936,7 @@ public class NativeSimdOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * float nvq_square_l2_distance_8bit(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue)
+     * float nvq_square_l2_distance_8bit(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue)
      * }
      */
     public static MemorySegment nvq_square_l2_distance_8bit$address() {
@@ -1945,10 +1945,10 @@ public class NativeSimdOps {
 
     /**
      * {@snippet lang=c :
-     * float nvq_square_l2_distance_8bit(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue)
+     * float nvq_square_l2_distance_8bit(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue)
      * }
      */
-    public static float nvq_square_l2_distance_8bit(MemorySegment vector, MemorySegment quantized, int length, float alpha, float x0, float minValue, float maxValue) {
+    public static float nvq_square_l2_distance_8bit(MemorySegment vector, MemorySegment quantized, long length, float alpha, float x0, float minValue, float maxValue) {
         var mh$ = nvq_square_l2_distance_8bit.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1965,7 +1965,7 @@ public class NativeSimdOps {
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_POINTER,
             NativeSimdOps.C_POINTER,
-            NativeSimdOps.C_INT,
+            NativeSimdOps.C_LONG,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
@@ -1980,7 +1980,7 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * float nvq_dot_product_8bit(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue)
+     * float nvq_dot_product_8bit(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue)
      * }
      */
     public static FunctionDescriptor nvq_dot_product_8bit$descriptor() {
@@ -1990,7 +1990,7 @@ public class NativeSimdOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * float nvq_dot_product_8bit(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue)
+     * float nvq_dot_product_8bit(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue)
      * }
      */
     public static MethodHandle nvq_dot_product_8bit$handle() {
@@ -2000,7 +2000,7 @@ public class NativeSimdOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * float nvq_dot_product_8bit(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue)
+     * float nvq_dot_product_8bit(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue)
      * }
      */
     public static MemorySegment nvq_dot_product_8bit$address() {
@@ -2009,10 +2009,10 @@ public class NativeSimdOps {
 
     /**
      * {@snippet lang=c :
-     * float nvq_dot_product_8bit(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue)
+     * float nvq_dot_product_8bit(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue)
      * }
      */
-    public static float nvq_dot_product_8bit(MemorySegment vector, MemorySegment quantized, int length, float alpha, float x0, float minValue, float maxValue) {
+    public static float nvq_dot_product_8bit(MemorySegment vector, MemorySegment quantized, long length, float alpha, float x0, float minValue, float maxValue) {
         var mh$ = nvq_dot_product_8bit.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2029,7 +2029,7 @@ public class NativeSimdOps {
             NativeSimdOps.C_LONG,
             NativeSimdOps.C_POINTER,
             NativeSimdOps.C_POINTER,
-            NativeSimdOps.C_INT,
+            NativeSimdOps.C_LONG,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
             NativeSimdOps.C_FLOAT,
@@ -2045,7 +2045,7 @@ public class NativeSimdOps {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * int64_t nvq_cosine_8bit_packed(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue, const float *centroid)
+     * int64_t nvq_cosine_8bit_packed(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue, const float *centroid)
      * }
      */
     public static FunctionDescriptor nvq_cosine_8bit_packed$descriptor() {
@@ -2055,7 +2055,7 @@ public class NativeSimdOps {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * int64_t nvq_cosine_8bit_packed(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue, const float *centroid)
+     * int64_t nvq_cosine_8bit_packed(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue, const float *centroid)
      * }
      */
     public static MethodHandle nvq_cosine_8bit_packed$handle() {
@@ -2065,7 +2065,7 @@ public class NativeSimdOps {
     /**
      * Address for:
      * {@snippet lang=c :
-     * int64_t nvq_cosine_8bit_packed(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue, const float *centroid)
+     * int64_t nvq_cosine_8bit_packed(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue, const float *centroid)
      * }
      */
     public static MemorySegment nvq_cosine_8bit_packed$address() {
@@ -2074,10 +2074,10 @@ public class NativeSimdOps {
 
     /**
      * {@snippet lang=c :
-     * int64_t nvq_cosine_8bit_packed(const float *vector, const unsigned char *quantized, int length, float alpha, float x0, float minValue, float maxValue, const float *centroid)
+     * int64_t nvq_cosine_8bit_packed(const float *vector, const unsigned char *quantized, size_t length, float alpha, float x0, float minValue, float maxValue, const float *centroid)
      * }
      */
-    public static long nvq_cosine_8bit_packed(MemorySegment vector, MemorySegment quantized, int length, float alpha, float x0, float minValue, float maxValue, MemorySegment centroid) {
+    public static long nvq_cosine_8bit_packed(MemorySegment vector, MemorySegment quantized, long length, float alpha, float x0, float minValue, float maxValue, MemorySegment centroid) {
         var mh$ = nvq_cosine_8bit_packed.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2136,7 +2136,7 @@ public class NativeSimdOps {
      * void add_in_place_f32(float *v1, const float *v2, size_t length)
      * }
      */
-    public static void add_in_place_f32(MemorySegment v1, MemorySegment v2, long length) {
+    public static void add_in_place_f32(MemorySegment v1, MemorySegment v2, size_t length) {
         var mh$ = add_in_place_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2195,7 +2195,7 @@ public class NativeSimdOps {
      * void add_scalar_in_place_f32(float *v1, float value, size_t length)
      * }
      */
-    public static void add_scalar_in_place_f32(MemorySegment v1, float value, long length) {
+    public static void add_scalar_in_place_f32(MemorySegment v1, float value, size_t length) {
         var mh$ = add_scalar_in_place_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2254,7 +2254,7 @@ public class NativeSimdOps {
      * void sub_in_place_f32(float *v1, const float *v2, size_t length)
      * }
      */
-    public static void sub_in_place_f32(MemorySegment v1, MemorySegment v2, long length) {
+    public static void sub_in_place_f32(MemorySegment v1, MemorySegment v2, size_t length) {
         var mh$ = sub_in_place_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2313,7 +2313,7 @@ public class NativeSimdOps {
      * void sub_scalar_in_place_f32(float *v1, float value, size_t length)
      * }
      */
-    public static void sub_scalar_in_place_f32(MemorySegment v1, float value, long length) {
+    public static void sub_scalar_in_place_f32(MemorySegment v1, float value, size_t length) {
         var mh$ = sub_scalar_in_place_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2372,7 +2372,7 @@ public class NativeSimdOps {
      * float max_f32(const float *v, size_t length)
      * }
      */
-    public static float max_f32(MemorySegment v, long length) {
+    public static float max_f32(MemorySegment v, size_t length) {
         var mh$ = max_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2431,7 +2431,7 @@ public class NativeSimdOps {
      * void min_in_place_f32(float *v1, const float *v2, size_t length)
      * }
      */
-    public static void min_in_place_f32(MemorySegment v1, MemorySegment v2, long length) {
+    public static void min_in_place_f32(MemorySegment v1, MemorySegment v2, size_t length) {
         var mh$ = min_in_place_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {

@@ -138,7 +138,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     public float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int encodedOffset, int encodedLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
         assert encoded.offset() == 0 : "Bulk shuffle shuffles are expected to have an offset of 0. Found: " + encoded.offset();
         // encoded is a pointer into a PQ chunk - we need to index into it by encodedOffset and provide encodedLength to the native code
-        return NativeSimdOps.pq_decoded_cosine_similarity_f32(((MemorySegmentByteSequence) encoded).get(), encodedOffset, encodedLength, clusterCount, ((MemorySegmentVectorFloat) partialSums).get(), ((MemorySegmentVectorFloat) aMagnitude).get(), bMagnitude);
+        return NativeSimdOps.pq_decoded_cosine_similarity_f32(((MemorySegmentByteSequence) encoded).get(), encodedOffset, (long) encodedLength, clusterCount, ((MemorySegmentVectorFloat) partialSums).get(), ((MemorySegmentVectorFloat) aMagnitude).get(), bMagnitude);
     }
 
     @Override
@@ -189,8 +189,8 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         var nativeQuery = ((MemorySegmentVectorFloat) query).get();
         var nativePartialSums = ((MemorySegmentVectorFloat) partialSums).get();
         switch (vsf) {
-            case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_euclidean_f32(nativeCodebook, codebookIndex, size, clusterCount, nativeQuery, queryOffset, nativePartialSums);
-            case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_dot_f32(nativeCodebook, codebookIndex, size, clusterCount, nativeQuery, queryOffset, nativePartialSums);
+            case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_euclidean_f32(nativeCodebook, codebookIndex, (long) size, clusterCount, nativeQuery, queryOffset, nativePartialSums);
+            case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_dot_f32(nativeCodebook, codebookIndex, (long) size, clusterCount, nativeQuery, queryOffset, nativePartialSums);
             default -> throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
         }
     }
@@ -204,7 +204,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     public void nvqQuantize8bit(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, ByteSequence<?> destination) {
         NativeSimdOps.nvq_quantize_8bit(
                 ((MemorySegmentVectorFloat) vector).get(),
-                vector.length(),
+                (long) vector.length(),
                 alpha, x0, minValue, maxValue,
                 ((MemorySegmentByteSequence) destination).get());
     }
@@ -213,7 +213,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     public float nvqLoss(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
         return NativeSimdOps.nvq_loss(
                 ((MemorySegmentVectorFloat) vector).get(),
-                vector.length(),
+                (long) vector.length(),
                 alpha, x0, minValue, maxValue, nBits);
     }
 
@@ -221,7 +221,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     public float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
         return NativeSimdOps.nvq_uniform_loss(
                 ((MemorySegmentVectorFloat) vector).get(),
-                vector.length(),
+                (long) vector.length(),
                 minValue, maxValue, nBits);
     }
 
@@ -231,7 +231,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         return NativeSimdOps.nvq_square_l2_distance_8bit(
                 ((MemorySegmentVectorFloat) vector).get(),
                 ((MemorySegmentByteSequence) quantizedVector).get(),
-                vector.length(),
+                (long) vector.length(),
                 alpha, x0, minValue, maxValue);
     }
 
@@ -241,7 +241,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         return NativeSimdOps.nvq_dot_product_8bit(
                 ((MemorySegmentVectorFloat) vector).get(),
                 ((MemorySegmentByteSequence) quantizedVector).get(),
-                vector.length(),
+                (long) vector.length(),
                 alpha, x0, minValue, maxValue);
     }
 
@@ -252,7 +252,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         long packed = NativeSimdOps.nvq_cosine_8bit_packed(
                 ((MemorySegmentVectorFloat) vector).get(),
                 ((MemorySegmentByteSequence) quantizedVector).get(),
-                vector.length(),
+                (long) vector.length(),
                 alpha, x0, minValue, maxValue,
                 ((MemorySegmentVectorFloat) centroid).get());
         float sum  = Float.intBitsToFloat((int)(packed & 0xFFFFFFFFL));

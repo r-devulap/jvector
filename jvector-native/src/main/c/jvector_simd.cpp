@@ -520,7 +520,7 @@ HWY_INLINE float distance_func(const float *codebook,
                                int clusterOffset,
                                const float *query,
                                int queryOffset,
-                               int size)
+                               size_t size)
 {
     if constexpr (DT == DistanceType::DotProduct)
         return DotProduct(codebook, clusterOffset, query, queryOffset, size);
@@ -535,7 +535,7 @@ template <DistanceType DT>
 // codebook/query values after each store to partialSums.
 HWY_INLINE void calculate_partial_sums_f32(const float *HWY_RESTRICT codebook,
                                            int codebookIndex,
-                                           int size,
+                                           size_t size,
                                            int clusterCount,
                                            const float *HWY_RESTRICT query,
                                            int queryOffset,
@@ -807,7 +807,7 @@ HWY_FLATTEN float assemble_and_sum_pq_f32(
 HWY_FLATTEN float
 pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets,
                                      int baseOffsetsOffset,
-                                     int baseOffsetsLength,
+                                     size_t baseOffsetsLength,
                                      int clusterCount,
                                      const float *partialSums,
                                      const float *aMagnitude,
@@ -867,7 +867,7 @@ pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets,
 
 HWY_FLATTEN void calculate_partial_sums_dot_f32(const float *codebook,
                                                     int codebookIndex,
-                                                    int size,
+                                                    size_t size,
                                                     int clusterCount,
                                                     const float *query,
                                                     int queryOffset,
@@ -884,7 +884,7 @@ HWY_FLATTEN void calculate_partial_sums_dot_f32(const float *codebook,
 
 HWY_FLATTEN void calculate_partial_sums_euclidean_f32(const float *codebook,
                                                           int codebookIndex,
-                                                          int size,
+                                                          size_t size,
                                                           int clusterCount,
                                                           const float *query,
                                                           int queryOffset,
@@ -1020,7 +1020,7 @@ static HWY_INLINE float logisticNQT_scalar(float value, float alpha, float x0)
 // =============================================================================
 
 HWY_FLATTEN void nvq_quantize_8bit(const float *HWY_RESTRICT vector,
-                                   int length,
+                                   size_t length,
                                    float alpha, float x0,
                                    float minValue, float maxValue,
                                    uint8_t *HWY_RESTRICT destination)
@@ -1070,7 +1070,7 @@ HWY_FLATTEN void nvq_quantize_8bit(const float *HWY_RESTRICT vector,
 }
 
 HWY_FLATTEN float nvq_loss(const float *HWY_RESTRICT vector,
-                           int length,
+                           size_t length,
                            float alpha, float x0,
                            float minValue, float maxValue,
                            int nBits)
@@ -1129,7 +1129,7 @@ HWY_FLATTEN float nvq_loss(const float *HWY_RESTRICT vector,
 }
 
 HWY_FLATTEN float nvq_uniform_loss(const float *HWY_RESTRICT vector,
-                                   int length,
+                                   size_t length,
                                    float minValue, float maxValue,
                                    int nBits)
 {
@@ -1201,7 +1201,7 @@ dequantize_bytes(FloatTag d_f, Int32Tag d_i, Uint16Tag d_u16, Uint8Tag d_u8,
 
 HWY_FLATTEN float nvq_square_l2_distance_8bit(const float    *HWY_RESTRICT vector,
                                               const uint8_t  *HWY_RESTRICT quantized,
-                                              int length,
+                                              size_t length,
                                               float alpha, float x0,
                                               float minValue, float maxValue)
 {
@@ -1257,7 +1257,7 @@ HWY_FLATTEN float nvq_square_l2_distance_8bit(const float    *HWY_RESTRICT vecto
 
 HWY_FLATTEN float nvq_dot_product_8bit(const float   *HWY_RESTRICT vector,
                                        const uint8_t *HWY_RESTRICT quantized,
-                                       int length,
+                                       size_t length,
                                        float alpha, float x0,
                                        float minValue, float maxValue)
 {
@@ -1314,7 +1314,7 @@ HWY_FLATTEN float nvq_dot_product_8bit(const float   *HWY_RESTRICT vector,
 // The Java caller unpacks with Float.intBitsToFloat — no heap allocation needed.
 HWY_FLATTEN int64_t nvq_cosine_8bit_packed(const float   *HWY_RESTRICT vector,
                                            const uint8_t *HWY_RESTRICT quantized,
-                                           int length,
+                                           size_t length,
                                            float alpha, float x0,
                                            float minValue, float maxValue,
                                            const float   *HWY_RESTRICT centroid)

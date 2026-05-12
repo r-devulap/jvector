@@ -1515,7 +1515,7 @@ public class NativeSimdOps {
      * float dot_product_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static float dot_product_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, size_t length) {
+    public static float dot_product_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
         var mh$ = dot_product_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1577,7 +1577,7 @@ public class NativeSimdOps {
      * float cosine_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static float cosine_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, size_t length) {
+    public static float cosine_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
         var mh$ = cosine_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -1639,7 +1639,7 @@ public class NativeSimdOps {
      * float euclidean_f32(const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
      * }
      */
-    public static float euclidean_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, size_t length) {
+    public static float euclidean_f32(MemorySegment a, long aoffset, MemorySegment b, long boffset, long length) {
         var mh$ = euclidean_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2080,7 +2080,7 @@ public class NativeSimdOps {
      * void add_in_place_f32(float *v1, const float *v2, size_t length)
      * }
      */
-    public static void add_in_place_f32(MemorySegment v1, MemorySegment v2, size_t length) {
+    public static void add_in_place_f32(MemorySegment v1, MemorySegment v2, long length) {
         var mh$ = add_in_place_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2139,7 +2139,7 @@ public class NativeSimdOps {
      * void add_scalar_in_place_f32(float *v1, float value, size_t length)
      * }
      */
-    public static void add_scalar_in_place_f32(MemorySegment v1, float value, size_t length) {
+    public static void add_scalar_in_place_f32(MemorySegment v1, float value, long length) {
         var mh$ = add_scalar_in_place_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2198,7 +2198,7 @@ public class NativeSimdOps {
      * void sub_in_place_f32(float *v1, const float *v2, size_t length)
      * }
      */
-    public static void sub_in_place_f32(MemorySegment v1, MemorySegment v2, size_t length) {
+    public static void sub_in_place_f32(MemorySegment v1, MemorySegment v2, long length) {
         var mh$ = sub_in_place_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2257,7 +2257,7 @@ public class NativeSimdOps {
      * void sub_scalar_in_place_f32(float *v1, float value, size_t length)
      * }
      */
-    public static void sub_scalar_in_place_f32(MemorySegment v1, float value, size_t length) {
+    public static void sub_scalar_in_place_f32(MemorySegment v1, float value, long length) {
         var mh$ = sub_scalar_in_place_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2316,7 +2316,7 @@ public class NativeSimdOps {
      * float max_f32(const float *v, size_t length)
      * }
      */
-    public static float max_f32(MemorySegment v, size_t length) {
+    public static float max_f32(MemorySegment v, long length) {
         var mh$ = max_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
@@ -2375,7 +2375,7 @@ public class NativeSimdOps {
      * void min_in_place_f32(float *v1, const float *v2, size_t length)
      * }
      */
-    public static void min_in_place_f32(MemorySegment v1, MemorySegment v2, size_t length) {
+    public static void min_in_place_f32(MemorySegment v1, MemorySegment v2, long length) {
         var mh$ = min_in_place_f32.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {

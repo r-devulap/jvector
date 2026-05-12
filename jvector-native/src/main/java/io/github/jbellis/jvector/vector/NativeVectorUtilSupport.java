@@ -76,7 +76,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     {
         assert baseOffsets.offset() == 0 : "Base offsets are expected to have an offset of 0. Found: " + baseOffsets.offset();
         // baseOffsets is a pointer into a PQ chunk - we need to index into it by baseOffsetsOffset and provide baseOffsetsLength to the native code
-        return NativeSimdOps.assemble_and_sum_f32_512(((MemorySegmentVectorFloat) data).get(), dataBase, ((MemorySegmentByteSequence) baseOffsets).get(), baseOffsetsOffset, baseOffsetsLength);
+        return NativeSimdOps.assemble_and_sum_f32_512(((MemorySegmentVectorFloat) data).get(), dataBase, ((MemorySegmentByteSequence) baseOffsets).get(), baseOffsetsOffset, (long) baseOffsetsLength);
     }
     @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
@@ -118,8 +118,14 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
             int vector2OrdinalOffset,
             int clusterCount                    // = k
     ) {
-        //Use the non-panama solution for now
-        return assembleAndSumPQ_128(codebookPartialSums, subspaceCount, vector1Ordinals, vector1OrdinalOffset, vector2Ordinals, vector2OrdinalOffset, clusterCount);
+        assert vector1Ordinals.offset() == 0 : "vector1Ordinals offset must be 0. Found: " + vector1Ordinals.offset();
+        assert vector2Ordinals.offset() == 0 : "vector2Ordinals offset must be 0. Found: " + vector2Ordinals.offset();
+        return NativeSimdOps.assemble_and_sum_pq_f32(
+                ((MemorySegmentVectorFloat) codebookPartialSums).get(),
+                (long) subspaceCount,
+                ((MemorySegmentByteSequence) vector1Ordinals).get(), vector1OrdinalOffset,
+                ((MemorySegmentByteSequence) vector2Ordinals).get(), vector2OrdinalOffset,
+                clusterCount);
     }
 
     @Override
@@ -173,6 +179,18 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         return NativeSimdOps.cosine_f32_512_native(((MemorySegmentVectorFloat) v1).get(), v1offset,
                                                    ((MemorySegmentVectorFloat) v2).get(), v2offset,
                                                    length);
+    }
+
+    @Override
+    public void calculatePartialSums(VectorFloat<?> codebook, int codebookIndex, int size, int clusterCount, VectorFloat<?> query, int queryOffset, VectorSimilarityFunction vsf, VectorFloat<?> partialSums) {
+        var nativeCodebook = ((MemorySegmentVectorFloat) codebook).get();
+        var nativeQuery = ((MemorySegmentVectorFloat) query).get();
+        var nativePartialSums = ((MemorySegmentVectorFloat) partialSums).get();
+        switch (vsf) {
+            case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_euclidean_f32_512(nativeCodebook, codebookIndex, size, clusterCount, nativeQuery, queryOffset, nativePartialSums);
+            case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_dot_f32_512(nativeCodebook, codebookIndex, size, clusterCount, nativeQuery, queryOffset, nativePartialSums);
+            default -> throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
+        }
     }
 
 }

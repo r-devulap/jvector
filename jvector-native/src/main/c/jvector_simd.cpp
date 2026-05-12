@@ -487,3 +487,415 @@ HWY_FLATTEN void min_in_place_f32(float *HWY_RESTRICT v1,
     }
 }
 
+// =============================================================================
+// PQ kernels
+// =============================================================================
+
+enum class DistanceType { DotProduct, Euclidean };
+
+// Computes the per-element score vector for a single SIMD register pair (c, qq).
+// For DotProduct: score[ii] = c[ii] * qq[ii]
+// For Euclidean:  score[ii] = (c[ii] - qq[ii])^2
+template <DistanceType DT, class D>
+HWY_INLINE hn::Vec<D> partial_sum_score(const hn::Vec<D> &c,
+                                        const hn::Vec<D> &qq)
+{
+    if constexpr (DT == DistanceType::DotProduct) { return hn::Mul(c, qq); }
+    else if constexpr (DT == DistanceType::Euclidean) {
+        const hn::Vec<D> diff = hn::Sub(c, qq);
+        return hn::Mul(diff, diff);
+    }
+    else {
+        static_assert(DT == DistanceType::DotProduct
+                              || DT == DistanceType::Euclidean,
+                      "Unsupported DistanceType");
+        // Unreachable, but silences compiler warnings about missing return.
+        return hn::Zero(c);
+    }
+}
+
+// Scalar fallback: returns dot_product_f32 or euclidean_f32 depending on DT.
+template <DistanceType DT>
+HWY_INLINE float distance_func(const float *codebook,
+                               int clusterOffset,
+                               const float *query,
+                               int queryOffset,
+                               int size)
+{
+    if constexpr (DT == DistanceType::DotProduct)
+        return DotProduct(codebook, clusterOffset, query, queryOffset, size);
+    else
+        return L2SquareDistance(
+                codebook, clusterOffset, query, queryOffset, size);
+}
+
+template <DistanceType DT>
+// HWY_RESTRICT on codebook and query informs the compiler that writes to
+// partialSums cannot alias either read-only input, so it need not reload
+// codebook/query values after each store to partialSums.
+HWY_INLINE void calculate_partial_sums_f32(const float *HWY_RESTRICT codebook,
+                                           int codebookIndex,
+                                           int size,
+                                           int clusterCount,
+                                           const float *HWY_RESTRICT query,
+                                           int queryOffset,
+                                           float *HWY_RESTRICT partialSums)
+{
+    int codebookBase = codebookIndex * clusterCount;
+    using FloatTag = hn::ScalableTag<float>;
+    FloatTag tag;
+    constexpr size_t kLanes = Lanes(tag);
+    alignas(64) float tmp[kLanes];
+    int ii = 0;
+
+    if constexpr (kLanes >= 2) {
+        if (size == 2) {
+            float qtmp[4] = {query[queryOffset],
+                             query[queryOffset + 1],
+                             query[queryOffset],
+                             query[queryOffset + 1]};
+            hn::Vec<FloatTag> queryVec = hn::LoadDup128(tag, qtmp);
+
+            constexpr size_t kBlock = 2;
+            constexpr int centroids_per_iter = kLanes / kBlock;
+
+            for (; ii + centroids_per_iter <= clusterCount;
+                 ii += centroids_per_iter) {
+                const float *cptr = codebook + ii * 2;
+                hn::Vec<FloatTag> centroidVec = hn::LoadU(tag, cptr);
+                hn::Vec<FloatTag> score = partial_sum_score<DT, FloatTag>(
+                        centroidVec, queryVec);
+                hn::Vec<FloatTag> swapped = hn::Shuffle2301(score);
+                hn::Vec<FloatTag> sum = score + swapped;
+                hn::StoreU(sum, tag, tmp);
+#pragma GCC unroll 8
+                for (int jj = 0; jj < centroids_per_iter; ++jj) {
+                    partialSums[codebookBase + ii + jj] = tmp[jj * 2];
+                }
+            }
+        }
+    }
+    if constexpr (kLanes >= 4) {
+        if (size == 4) {
+            constexpr size_t centroids_per_iter = kLanes / 4;
+            hn::Vec<FloatTag> queryVec
+                    = hn::LoadDup128(tag, query + queryOffset);
+
+            for (; ii + centroids_per_iter <= clusterCount;
+                 ii += centroids_per_iter) {
+                const float *cptr = codebook + ii * size;
+                hn::Vec<FloatTag> centroidVec = hn::LoadU(tag, cptr);
+                hn::Vec<FloatTag> sum = partial_sum_score<DT, FloatTag>(
+                        centroidVec, queryVec);
+                hn::Vec<FloatTag> temp = hn::Shuffle2301(sum);
+                sum = hn::Add(sum, temp);
+                temp = hn::Shuffle1032(sum);
+                sum = hn::Add(sum, temp);
+                hn::StoreU(sum, tag, tmp);
+#pragma GCC unroll 4
+                for (int jj = 0; jj < centroids_per_iter; ++jj) {
+                    partialSums[codebookBase + ii + jj] = tmp[jj * 4];
+                }
+            }
+        }
+    }
+    if constexpr (kLanes >= 8) {
+        if (size == 8) {
+            hn::Vec<FloatTag> queryVec = LoadDup256(tag, query + queryOffset);
+            constexpr size_t centroids_per_iter = kLanes / 8;
+
+            for (; ii + centroids_per_iter <= clusterCount;
+                 ii += centroids_per_iter) {
+                const float *cptr = codebook + ii * size;
+                hn::Vec<FloatTag> centroidVec = hn::LoadU(tag, cptr);
+                hn::Vec<FloatTag> sum = partial_sum_score<DT, FloatTag>(
+                        centroidVec, queryVec);
+                hn::Vec<FloatTag> temp = hn::SwapAdjacentBlocks(sum);
+                sum = hn::Add(sum, temp);
+                temp = hn::Shuffle1032(sum);
+                sum = hn::Add(sum, temp);
+                temp = hn::Shuffle2301(sum);
+                sum = hn::Add(sum, temp);
+                hn::StoreU(sum, tag, tmp);
+#pragma GCC unroll 2
+                for (int jj = 0; jj < centroids_per_iter; ++jj) {
+                    partialSums[codebookBase + ii + jj] = tmp[jj * 8];
+                }
+            }
+        }
+    }
+    if constexpr (kLanes == 16) {
+        // Don't have to worry about making this work on 1024-bit lanes just yet
+        if (size == 16) {
+            const hn::Vec<FloatTag> queryVec
+                    = hn::LoadU(tag, query + queryOffset);
+            for (; ii < clusterCount; ++ii) {
+                const hn::Vec<FloatTag> centroidVec
+                        = hn::LoadU(tag, codebook + ii * size);
+                partialSums[codebookBase + ii] = hn::ReduceSum(
+                        tag,
+                        partial_sum_score<DT, FloatTag>(centroidVec, queryVec));
+            }
+        }
+    }
+    for (; ii < clusterCount; ii++) {
+        partialSums[codebookBase + ii] = distance_func<DT>(
+                codebook, ii * size, query, queryOffset, size);
+    }
+}
+
+// HWY_RESTRICT is not needed here: `data` (float*) and `baseOffsets` (unsigned char*)
+// have different types, so the compiler already treats them as non-aliasing under
+// C++ strict-aliasing rules. Neither pointer is written through, so there are no
+// stores that could force a reload of the other.
+
+// Inner kernel templated on the Highway tag type so it works for both the
+// full-width ScalableTag path and the capped HWY_CAPPED fast paths.
+// gatherIndices[k] = (ii + k) * dataBase + baseOffsets[ii + k]
+template <class FloatTag>
+HWY_INLINE float AssembleAndSumImpl(
+        const float         *HWY_RESTRICT data,
+        int                  dataBase,
+        const uint8_t       *HWY_RESTRICT baseOffsets,
+        size_t               baseOffsetsLength,
+        FloatTag             floatTag)
+{
+    const hn::RebindToSigned<FloatTag>                  int32Tag;
+    const hn::Rebind<uint16_t, hn::RebindToSigned<FloatTag>> uint16Tag;
+    const hn::Rebind<uint8_t,  hn::RebindToSigned<FloatTag>> uint8Tag;
+    const size_t lanes = hn::Lanes(floatTag);
+
+    const auto dataBaseVec   = hn::Set(int32Tag, dataBase);
+    const auto laneIncrement = hn::Set(int32Tag, static_cast<int32_t>(lanes));
+    auto indexVec = hn::Iota(int32Tag, 0);
+    auto sumVec   = hn::Zero(floatTag);
+
+    size_t ii = 0;
+    for (; ii + lanes <= baseOffsetsLength; ii += lanes) {
+        // Load `lanes` bytes and zero-extend to i32 via u8→u16→i32.
+        const auto offsetVec = hn::PromoteTo(int32Tag,
+                                   hn::PromoteTo(uint16Tag,
+                                       hn::LoadU(uint8Tag, baseOffsets + ii)));
+        sumVec   = hn::Add(sumVec, hn::GatherIndex(floatTag, data,
+                               hn::Add(hn::Mul(indexVec, dataBaseVec), offsetVec)));
+        indexVec = hn::Add(indexVec, laneIncrement);
+    }
+
+    float res = hn::ReduceSum(floatTag, sumVec);
+    for (; ii < baseOffsetsLength; ii++) {
+        res += data[dataBase * ii + baseOffsets[ii]];
+    }
+    return res;
+}
+
+HWY_FLATTEN float assemble_and_sum_f32_512(const float *data,
+                                           int dataBase,
+                                           const unsigned char *baseOffsets,
+                                           int baseOffsetsOffset,
+                                           size_t baseOffsetsLength)
+{
+    baseOffsets += baseOffsetsOffset;
+
+#if HWY_MAX_BYTES > 16
+    if (baseOffsetsLength <= 4) {
+        return AssembleAndSumImpl(data, dataBase, baseOffsets, baseOffsetsLength,
+                                  HWY_CAPPED(float, 4){});
+    }
+#if HWY_MAX_BYTES > 32
+    if (baseOffsetsLength <= 8) {
+        return AssembleAndSumImpl(data, dataBase, baseOffsets, baseOffsetsLength,
+                                  HWY_CAPPED(float, 8){});
+    }
+#endif
+#endif
+
+    return AssembleAndSumImpl(data, dataBase, baseOffsets, baseOffsetsLength,
+                              hn::ScalableTag<float>{});
+}
+
+// Inner kernel for the triangular-table PQ gather, templated on the Highway tag
+// type so it works for both the full-width ScalableTag path and HWY_CAPPED fast paths.
+// gatherIndex[j] = laneIdx[j]*blockSize + triangularIndex(c1[j], c2[j])
+template <class FloatTag>
+HWY_INLINE float AssembleAndSumPQImpl(
+        const float    *HWY_RESTRICT data,
+        size_t          subspaceCount,
+        const uint8_t  *HWY_RESTRICT baseOffsets1,
+        const uint8_t  *HWY_RESTRICT baseOffsets2,
+        int             k,
+        int             blockSize,
+        FloatTag        d_f)
+{
+    const hn::RebindToSigned<FloatTag>                       d_i;
+    const hn::Rebind<uint16_t, hn::RebindToSigned<FloatTag>> d_u16;
+    const hn::Rebind<uint8_t,  hn::RebindToSigned<FloatTag>> d_u8;
+    const size_t lanes = hn::Lanes(d_f);
+
+    const auto vk         = hn::Set(d_i, k);
+    const auto vBlockSize = hn::Set(d_i, blockSize);
+    const auto laneInc    = hn::Set(d_i, static_cast<int32_t>(lanes));
+    auto laneIdx = hn::Iota(d_i, 0);
+    auto sumVec  = hn::Zero(d_f);
+
+    size_t ii = 0;
+    for (; ii + lanes <= subspaceCount; ii += lanes) {
+        // Load `lanes` u8 ordinals and zero-extend to i32 via u8→u16→i32.
+        const auto c1 = hn::PromoteTo(d_i, hn::PromoteTo(d_u16, hn::LoadU(d_u8, baseOffsets1 + ii)));
+        const auto c2 = hn::PromoteTo(d_i, hn::PromoteTo(d_u16, hn::LoadU(d_u8, baseOffsets2 + ii)));
+        const auto r  = hn::Min(c1, c2);
+        const auto c  = hn::Max(c1, c2);
+        // triangular = r*(r-1)/2; always even & non-negative so ShiftRight<1> is exact.
+        const auto triangular = hn::ShiftRight<1>(hn::Mul(r, hn::Sub(r, hn::Set(d_i, 1))));
+        const auto offsetRow  = hn::Sub(hn::Mul(r, vk), triangular);
+        // gatherIndex = laneIdx*blockSize + offsetRow + (c - r)
+        const auto gatherIdx = hn::Add(hn::Mul(laneIdx, vBlockSize),
+                                       hn::Add(offsetRow, hn::Sub(c, r)));
+        sumVec  = hn::Add(sumVec, hn::GatherIndex(d_f, data, gatherIdx));
+        laneIdx = hn::Add(laneIdx, laneInc);
+    }
+
+    float res = hn::ReduceSum(d_f, sumVec);
+    for (; ii < subspaceCount; ii++) {
+        int c1v = baseOffsets1[ii], c2v = baseOffsets2[ii];
+        int r   = c1v < c2v ? c1v : c2v;
+        int cv  = c1v > c2v ? c1v : c2v;
+        res += data[ii * blockSize + r * k - r * (r - 1) / 2 + (cv - r)];
+    }
+    return res;
+}
+
+// For each of the M subspaces, looks up data[i*blockSize + triangularIndex(c1[i], c2[i])]
+// where blockSize = k*(k+1)/2 and triangularIndex(r,c) = r*k - r*(r-1)/2 + (c-r),
+// r = min(c1,c2), c = max(c1,c2).  Vectorised via a gather over i32 indices built
+// from integer min/max and an arithmetic right-shift for the triangular number.
+// On ISAs with >128-bit registers, capped fast-paths are used when subspaceCount
+// fits in 4 or 8 lanes to avoid wasting the extra lanes of a wide register.
+HWY_FLATTEN float assemble_and_sum_pq_f32(
+        const float    *HWY_RESTRICT data,
+        size_t          subspaceCount,
+        const uint8_t  *HWY_RESTRICT baseOffsets1, int baseOffsetsOffset1,
+        const uint8_t  *HWY_RESTRICT baseOffsets2, int baseOffsetsOffset2,
+        int             clusterCount)
+{
+    baseOffsets1 += baseOffsetsOffset1;
+    baseOffsets2 += baseOffsetsOffset2;
+
+    const int k         = clusterCount;
+    const int blockSize = k * (k + 1) / 2;
+
+#if HWY_MAX_BYTES > 16
+    if (subspaceCount <= 4) {
+        return AssembleAndSumPQImpl(data, subspaceCount, baseOffsets1, baseOffsets2,
+                                    k, blockSize, HWY_CAPPED(float, 4){});
+    }
+#if HWY_MAX_BYTES > 32
+    if (subspaceCount <= 8) {
+        return AssembleAndSumPQImpl(data, subspaceCount, baseOffsets1, baseOffsets2,
+                                    k, blockSize, HWY_CAPPED(float, 8){});
+    }
+#endif
+#endif
+
+    return AssembleAndSumPQImpl(data, subspaceCount, baseOffsets1, baseOffsets2,
+                                k, blockSize, hn::ScalableTag<float>{});
+}
+
+// HWY_RESTRICT is not needed here: `baseOffsets` (unsigned char*) is a different type
+// from `partialSums` and `aMagnitude` (float*), so strict-aliasing already guarantees
+// the compiler that writes through one cannot affect loads from the other. All three
+// pointers are read-only within the loop, so there are no stores to reason about anyway.
+HWY_FLATTEN float
+pq_decoded_cosine_similarity_f32_512(const unsigned char *baseOffsets,
+                                     int baseOffsetsOffset,
+                                     int baseOffsetsLength,
+                                     int clusterCount,
+                                     const float *partialSums,
+                                     const float *aMagnitude,
+                                     float bMagnitude)
+{
+    using FloatTag = hn::ScalableTag<float>;
+    using Int32Tag = hn::RebindToSigned<FloatTag>;
+    using Uint16Tag = hn::Rebind<uint16_t, Int32Tag>;
+    using Uint8Tag = hn::Rebind<uint8_t, Int32Tag>;
+
+    const FloatTag floatTag;
+    const Int32Tag int32Tag;
+    const Uint16Tag uint16Tag;
+    const Uint8Tag uint8Tag;
+    const size_t kLanes = hn::Lanes(floatTag);
+
+    baseOffsets += baseOffsetsOffset;
+
+    auto sumVec = hn::Zero(floatTag);
+    auto magnitudeVec = hn::Zero(floatTag);
+    const auto clusterCountVec = hn::Set(int32Tag, clusterCount);
+    const auto laneIncrement = hn::Set(int32Tag, static_cast<int32_t>(kLanes));
+    auto indexVec = hn::Iota(int32Tag, 0);
+
+    int ii = 0;
+    for (; ii + static_cast<int>(kLanes) <= baseOffsetsLength;
+         ii += static_cast<int>(kLanes)) {
+        // Load kLanes bytes and zero-extend to int32 via two PromoteTo steps (u8→u16→i32)
+        const auto u8Vec = hn::LoadU(uint8Tag, baseOffsets + ii);
+        const auto u16Vec = hn::PromoteTo(uint16Tag, u8Vec);
+        const auto offsetVec = hn::PromoteTo(int32Tag, u16Vec);
+
+        // gatherIndices[k] = (ii + k) * clusterCount + baseOffsets[ii + k]
+        const auto gatherIndices
+                = hn::Add(hn::Mul(indexVec, clusterCountVec), offsetVec);
+
+        sumVec = hn::Add(sumVec,
+                         hn::GatherIndex(floatTag, partialSums, gatherIndices));
+        magnitudeVec
+                = hn::Add(magnitudeVec,
+                          hn::GatherIndex(floatTag, aMagnitude, gatherIndices));
+        indexVec = hn::Add(indexVec, laneIncrement);
+    }
+
+    float sumResult = hn::ReduceSum(floatTag, sumVec);
+    float aMagnitudeResult = hn::ReduceSum(floatTag, magnitudeVec);
+
+    // Handle the remaining elements
+    for (; ii < baseOffsetsLength; ii++) {
+        int offset = clusterCount * ii + baseOffsets[ii];
+        sumResult += partialSums[offset];
+        aMagnitudeResult += aMagnitude[offset];
+    }
+
+    return sumResult / sqrtf(aMagnitudeResult * bMagnitude);
+}
+
+HWY_FLATTEN void calculate_partial_sums_dot_f32_512(const float *codebook,
+                                                    int codebookIndex,
+                                                    int size,
+                                                    int clusterCount,
+                                                    const float *query,
+                                                    int queryOffset,
+                                                    float *partialSums)
+{
+    calculate_partial_sums_f32<DistanceType::DotProduct>(codebook,
+                                                         codebookIndex,
+                                                         size,
+                                                         clusterCount,
+                                                         query,
+                                                         queryOffset,
+                                                         partialSums);
+}
+
+HWY_FLATTEN void calculate_partial_sums_euclidean_f32_512(const float *codebook,
+                                                          int codebookIndex,
+                                                          int size,
+                                                          int clusterCount,
+                                                          const float *query,
+                                                          int queryOffset,
+                                                          float *partialSums)
+{
+    calculate_partial_sums_f32<DistanceType::Euclidean>(codebook,
+                                                        codebookIndex,
+                                                        size,
+                                                        clusterCount,
+                                                        query,
+                                                        queryOffset,
+                                                        partialSums);
+}
+

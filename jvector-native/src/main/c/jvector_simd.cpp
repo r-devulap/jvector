@@ -35,7 +35,7 @@
 // HWY_FLATTEN
 //   Expands to `__attribute__((flatten))`, which asks the compiler to inline
 //   *all* callees into the annotated function.  Used on the public entry-points
-//   (assemble_and_sum_f32_512, pq_decoded_cosine_similarity_f32_512, the three
+//   (assemble_and_sum_f32, pq_decoded_cosine_similarity_f32, the three
 //   distance wrappers) so that the multi-target Highway dispatch stub sees a
 //   single monolithic body with no residual call overhead.
 //
@@ -75,7 +75,7 @@
 //
 // Rebind<NewT, Tag>  /  RebindToSigned<Tag>
 //   Produce a new tag of the same width but a different element type.
-//   Used in assemble_and_sum_f32_512 and pq_decoded_cosine_similarity to
+//   Used in assemble_and_sum_f32 and pq_decoded_cosine_similarity to
 //   reinterpret the float-width register as uint8/uint16/int32 during the
 //   index promotion pipeline.
 //
@@ -334,19 +334,19 @@ HWY_INLINE float L2SquareDistance(const float *a,
     return L2SquareDistanceImpl(hn::ScalableTag<float>{}, a, b, length);
 }
 
-HWY_FLATTEN float cosine_f32_512_native(
+HWY_FLATTEN float cosine_f32_native(
         const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
 {
     return CosineDistance(a, aoffset, b, boffset, length);
 }
 
-HWY_FLATTEN float dot_product_f32_512_native(
+HWY_FLATTEN float dot_product_f32_native(
         const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
 {
     return DotProduct(a, aoffset, b, boffset, length);
 }
 
-HWY_FLATTEN float euclidean_f32_512_native(
+HWY_FLATTEN float euclidean_f32_native(
         const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
 {
     return L2SquareDistance(a, aoffset, b, boffset, length);
@@ -688,7 +688,7 @@ HWY_INLINE float AssembleAndSumImpl(
     return res;
 }
 
-HWY_FLATTEN float assemble_and_sum_f32_512(const float *data,
+HWY_FLATTEN float assemble_and_sum_f32(const float *data,
                                            int dataBase,
                                            const unsigned char *baseOffsets,
                                            int baseOffsetsOffset,
@@ -805,7 +805,7 @@ HWY_FLATTEN float assemble_and_sum_pq_f32(
 // the compiler that writes through one cannot affect loads from the other. All three
 // pointers are read-only within the loop, so there are no stores to reason about anyway.
 HWY_FLATTEN float
-pq_decoded_cosine_similarity_f32_512(const unsigned char *baseOffsets,
+pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets,
                                      int baseOffsetsOffset,
                                      int baseOffsetsLength,
                                      int clusterCount,
@@ -865,7 +865,7 @@ pq_decoded_cosine_similarity_f32_512(const unsigned char *baseOffsets,
     return sumResult / sqrtf(aMagnitudeResult * bMagnitude);
 }
 
-HWY_FLATTEN void calculate_partial_sums_dot_f32_512(const float *codebook,
+HWY_FLATTEN void calculate_partial_sums_dot_f32(const float *codebook,
                                                     int codebookIndex,
                                                     int size,
                                                     int clusterCount,
@@ -882,7 +882,7 @@ HWY_FLATTEN void calculate_partial_sums_dot_f32_512(const float *codebook,
                                                          partialSums);
 }
 
-HWY_FLATTEN void calculate_partial_sums_euclidean_f32_512(const float *codebook,
+HWY_FLATTEN void calculate_partial_sums_euclidean_f32(const float *codebook,
                                                           int codebookIndex,
                                                           int size,
                                                           int clusterCount,
@@ -1177,7 +1177,7 @@ HWY_FLATTEN float nvq_uniform_loss(const float *HWY_RESTRICT vector,
 
 // Shared setup for the three 8-bit scoring kernels.
 // Computes the scalar parameters and loads u8→float using the same
-// PromoteTo chain as assemble_and_sum_f32_512.
+// PromoteTo chain as assemble_and_sum_f32.
 //
 // Inline helper: load kLanes bytes from `quantized+i`, convert to float,
 // apply dequantization (scale+bias → logitNQT).

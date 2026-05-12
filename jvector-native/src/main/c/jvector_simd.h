@@ -28,16 +28,16 @@ extern "C" {
 #endif
 bool check_avx512_compatibility(void);
 /* PQ kernels */
-float assemble_and_sum_f32_512(const float* data, int dataBase, const unsigned char* baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength);
+float assemble_and_sum_f32(const float* data, int dataBase, const unsigned char* baseOffsets, int baseOffsetsOffset, size_t baseOffsetsLength);
 float assemble_and_sum_pq_f32(const float* data, size_t subspaceCount, const unsigned char* baseOffsets1, int baseOffsetsOffset1, const unsigned char* baseOffsets2, int baseOffsetsOffset2, int clusterCount);
-float pq_decoded_cosine_similarity_f32_512(const unsigned char* baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, const float* partialSums, const float* aMagnitude, float bMagnitude);
-void calculate_partial_sums_euclidean_f32_512(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums);
-void calculate_partial_sums_dot_f32_512(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums);
+float pq_decoded_cosine_similarity_f32(const unsigned char* baseOffsets, int baseOffsetsOffset, int baseOffsetsLength, int clusterCount, const float* partialSums, const float* aMagnitude, float bMagnitude);
+void calculate_partial_sums_euclidean_f32(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums);
+void calculate_partial_sums_dot_f32(const float* codebook, int codebookBase, int size, int clusterCount, const float* query, int queryOffset, float* partialSums);
 
 /* Vector similarity kernels */
-float dot_product_f32_512_native(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
-float cosine_f32_512_native(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
-float euclidean_f32_512_native(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
+float dot_product_f32_native(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
+float cosine_f32_native(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
+float euclidean_f32_native(const float* a, size_t aoffset, const float* b, size_t boffset, size_t length);
 
 /* NVQ kernels */
 void    nvq_quantize_8bit(const float* vector, int length, float alpha, float x0, float minValue, float maxValue, unsigned char* destination);

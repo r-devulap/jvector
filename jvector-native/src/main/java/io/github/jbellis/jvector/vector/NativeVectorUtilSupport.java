@@ -76,7 +76,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     {
         assert baseOffsets.offset() == 0 : "Base offsets are expected to have an offset of 0. Found: " + baseOffsets.offset();
         // baseOffsets is a pointer into a PQ chunk - we need to index into it by baseOffsetsOffset and provide baseOffsetsLength to the native code
-        return NativeSimdOps.assemble_and_sum_f32_512(((MemorySegmentVectorFloat) data).get(), dataBase, ((MemorySegmentByteSequence) baseOffsets).get(), baseOffsetsOffset, (long) baseOffsetsLength);
+        return NativeSimdOps.assemble_and_sum_f32(((MemorySegmentVectorFloat) data).get(), dataBase, ((MemorySegmentByteSequence) baseOffsets).get(), baseOffsetsOffset, (long) baseOffsetsLength);
     }
 
     @Override
@@ -138,47 +138,47 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     public float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int encodedOffset, int encodedLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
         assert encoded.offset() == 0 : "Bulk shuffle shuffles are expected to have an offset of 0. Found: " + encoded.offset();
         // encoded is a pointer into a PQ chunk - we need to index into it by encodedOffset and provide encodedLength to the native code
-        return NativeSimdOps.pq_decoded_cosine_similarity_f32_512(((MemorySegmentByteSequence) encoded).get(), encodedOffset, encodedLength, clusterCount, ((MemorySegmentVectorFloat) partialSums).get(), ((MemorySegmentVectorFloat) aMagnitude).get(), bMagnitude);
+        return NativeSimdOps.pq_decoded_cosine_similarity_f32(((MemorySegmentByteSequence) encoded).get(), encodedOffset, encodedLength, clusterCount, ((MemorySegmentVectorFloat) partialSums).get(), ((MemorySegmentVectorFloat) aMagnitude).get(), bMagnitude);
     }
 
     @Override
     public float dotProduct(VectorFloat<?> v1, VectorFloat<?> v2) {
-        return NativeSimdOps.dot_product_f32_512_native(((MemorySegmentVectorFloat) v1).get(), 0,
+        return NativeSimdOps.dot_product_f32_native(((MemorySegmentVectorFloat) v1).get(), 0,
                                                         ((MemorySegmentVectorFloat) v2).get(), 0,
                                                         v1.length());
     }
 
     @Override
     public float dotProduct(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, final int length) {
-        return NativeSimdOps.dot_product_f32_512_native(((MemorySegmentVectorFloat) v1).get(), v1offset,
+        return NativeSimdOps.dot_product_f32_native(((MemorySegmentVectorFloat) v1).get(), v1offset,
                                                         ((MemorySegmentVectorFloat) v2).get(), v2offset,
                                                         length);
     }
 
     @Override
     public float squareDistance(VectorFloat<?> v1, VectorFloat<?> v2) {
-        return NativeSimdOps.euclidean_f32_512_native(((MemorySegmentVectorFloat) v1).get(), 0,
+        return NativeSimdOps.euclidean_f32_native(((MemorySegmentVectorFloat) v1).get(), 0,
                                                       ((MemorySegmentVectorFloat) v2).get(), 0,
                                                       v1.length());
     }
 
     @Override
     public float squareDistance(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
-        return NativeSimdOps.euclidean_f32_512_native(((MemorySegmentVectorFloat) v1).get(), v1offset,
+        return NativeSimdOps.euclidean_f32_native(((MemorySegmentVectorFloat) v1).get(), v1offset,
                                                       ((MemorySegmentVectorFloat) v2).get(), v2offset,
                                                       length);
     }
 
     @Override
     public float cosine(VectorFloat<?> v1, VectorFloat<?> v2) {
-        return NativeSimdOps.cosine_f32_512_native(((MemorySegmentVectorFloat) v1).get(), 0,
+        return NativeSimdOps.cosine_f32_native(((MemorySegmentVectorFloat) v1).get(), 0,
                                                    ((MemorySegmentVectorFloat) v2).get(), 0,
                                                    v1.length());
     }
 
     @Override
     public float cosine(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
-        return NativeSimdOps.cosine_f32_512_native(((MemorySegmentVectorFloat) v1).get(), v1offset,
+        return NativeSimdOps.cosine_f32_native(((MemorySegmentVectorFloat) v1).get(), v1offset,
                                                    ((MemorySegmentVectorFloat) v2).get(), v2offset,
                                                    length);
     }
@@ -189,8 +189,8 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         var nativeQuery = ((MemorySegmentVectorFloat) query).get();
         var nativePartialSums = ((MemorySegmentVectorFloat) partialSums).get();
         switch (vsf) {
-            case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_euclidean_f32_512(nativeCodebook, codebookIndex, size, clusterCount, nativeQuery, queryOffset, nativePartialSums);
-            case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_dot_f32_512(nativeCodebook, codebookIndex, size, clusterCount, nativeQuery, queryOffset, nativePartialSums);
+            case EUCLIDEAN -> NativeSimdOps.calculate_partial_sums_euclidean_f32(nativeCodebook, codebookIndex, size, clusterCount, nativeQuery, queryOffset, nativePartialSums);
+            case DOT_PRODUCT -> NativeSimdOps.calculate_partial_sums_dot_f32(nativeCodebook, codebookIndex, size, clusterCount, nativeQuery, queryOffset, nativePartialSums);
             default -> throw new UnsupportedOperationException("Unsupported similarity function " + vsf);
         }
     }

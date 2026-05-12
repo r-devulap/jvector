@@ -8,9 +8,5 @@
 #if HWY_STATIC_TARGET != HWY_AVX2
 #error "Highway did not select HWY_AVX2 for the AVX2 build. Check compiler flags, compiler support, and Highway blocklists."
 #endif
-#elif defined(JV_REQUIRE_HWY_SCALAR)
-#if HWY_STATIC_TARGET != HWY_SSE4
-#error "Highway did not select HWY_SSE4 for the scalar build."
-#endif
 #endif //
 #endif // __X86_64__

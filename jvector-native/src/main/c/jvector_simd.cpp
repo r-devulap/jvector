@@ -899,3 +899,483 @@ HWY_FLATTEN void calculate_partial_sums_euclidean_f32_512(const float *codebook,
                                                         partialSums);
 }
 
+// =============================================================================
+// NVQ kernels
+// =============================================================================
+//
+// Bit-manipulation helpers used by all NVQ public kernels:
+//
+// logisticNQT — approximate sigmoid via IEEE 754 bit tricks (2^x approximation).
+// logitNQT    — inverse: fast log2 via exponent extraction.
+// Both exploit the float bit layout to avoid transcendental instructions.
+//
+
+// logisticNQT: approximate sigmoid using integer bit manipulation.
+// Computes an approximation of the logistic function:
+//   result ≈ 1 / (1 + exp(-alpha * (v - x0)))
+// using the identity sigmoid(x) = 2^x / (2^x + 1) and a fast bit-hack for 2^x:
+//   given x = p + f where p is integer and f ∈ [0,1):
+//     2^x ≈ reinterpret_float(bits_of((f*0.5+1.0) << 23  +  p << 23))
+template <class D>
+HWY_INLINE hn::Vec<D> logisticNQT(D d, hn::Vec<D> v, float alpha, float x0)
+{
+    const hn::RebindToSigned<D> di;
+
+    // temp = alpha * v - alpha * x0
+    auto temp = hn::MulAdd(v, hn::Set(d, alpha), hn::Set(d, -alpha * x0));
+
+    // p = (int)(temp + 1) where temp >= 0, else (int)(temp)
+    // Mirrors Java: p = (int) floor(temp + 1); truncation == floor for temp >= 0.
+    const auto isPositive = hn::Not(hn::IsNegative(temp));
+    auto selected = hn::IfThenElse(isPositive,
+                                   hn::Add(temp, hn::Set(d, 1.0f)),
+                                   temp);
+    auto p = hn::ConvertTo(di, selected);  // truncate towards zero
+
+    // e = (float) p
+    auto e = hn::ConvertTo(d, p);
+
+    // m = reinterpret_bits((temp - e) * 0.5 + 1.0)
+    // (temp - e) is in (-1, 1), so the result is in (0.5, 1.5) — a mantissa value.
+    auto m = hn::BitCast(di,
+                         hn::MulAdd(hn::Sub(temp, e),
+                                    hn::Set(d, 0.5f),
+                                    hn::Set(d, 1.0f)));
+
+    // Reconstruct: (m_bits + (p << 23)) reinterpreted as float  =  m_mantissa * 2^p
+    auto result = hn::BitCast(d, hn::Add(m, hn::ShiftLeft<23>(p)));
+
+    // Sigmoid: result / (result + 1)
+    return hn::Div(result, hn::Add(result, hn::Set(d, 1.0f)));
+}
+
+// logitNQT: inverse of logisticNQT — fast log2 via IEEE 754 exponent extraction.
+// Computes approximately:
+//   inverseAlpha * (log2(v / (1-v)) - 1) + x0
+// The "-1" offset comes from subtracting 128 instead of 127 from the biased exponent,
+// matching the Java implementation exactly.
+template <class D>
+HWY_INLINE hn::Vec<D> logitNQT(D d, hn::Vec<D> v, float inverseAlpha, float x0)
+{
+    const hn::RebindToSigned<D> di;
+
+    // z = v / (1 - v)
+    auto z = hn::Div(v, hn::Sub(hn::Set(d, 1.0f), v));
+
+    // Reinterpret float bits as int32 to extract exponent and mantissa fields.
+    auto temp = hn::BitCast(di, z);
+
+    // p = (biased_exponent >> 23) - 128
+    // Masking with 0x7f800000 isolates the 8 exponent bits; shifting by 23 places
+    // them in the low byte. Subtracting 128 (vs. the standard 127 bias) is intentional
+    // and matches the Java source.
+    auto p = hn::Sub(hn::ShiftRight<23>(hn::And(temp, hn::Set(di, 0x7f800000))),
+                     hn::Set(di, 128));
+
+    // m = reinterpret as float: set exponent to 127 (i.e., 2^0) and keep mantissa
+    // → value in [1.0, 2.0)
+    auto m = hn::BitCast(d, hn::Add(hn::And(temp, hn::Set(di, 0x007fffff)),
+                                    hn::Set(di, 0x3f800000)));
+
+    // return (m + (float)p) * inverseAlpha + x0
+    return hn::MulAdd(hn::Add(m, hn::ConvertTo(d, p)),
+                      hn::Set(d, inverseAlpha),
+                      hn::Set(d, x0));
+}
+
+// Single-element wrappers used only for the two setup constants (logisticBias,
+// logisticScale) computed at the start of each NVQ kernel.  They delegate to
+// the vector templates via CappedTag<float,1> so there is no duplication of
+// the bit-manipulation logic.  They are NOT called in any hot loop — all tail
+// elements are handled by LoadN + FirstN-masked vector operations below.
+static HWY_INLINE float logisticNQT_scalar(float value, float alpha, float x0)
+{
+    const hn::CappedTag<float, 1> d1;
+    return hn::GetLane(logisticNQT(d1, hn::Set(d1, value), alpha, x0));
+}
+
+// Public kernels — called from Java via FFI.
+//
+// All six functions mirror the @Override methods in PanamaVectorUtilSupport.
+// They share the same mathematical logic; the Highway vector loops replace the
+// Panama FloatVector loops and the scalar tails are identical to the Java ones.
+//
+// Byte↔float conversion pipeline (mirrors Java nvqDequantize8bit):
+//   LoadU(uint8Tag, ptr)   — fill 4N-lane u8 vector from N bytes at ptr
+//   PromoteTo(uint16Tag)   — lower N u8s → N u16s (2N-lane vector)
+//   PromoteTo(int32Tag)    — lower N u16s → N i32s (N-lane vector)
+//   ConvertTo(floatTag)    — i32 → float
+//   MulAdd(scale, bias)    — byte * logisticScale + logisticBias
+//   logitNQT(...)          — inverse logistic
+//
+// Float→byte pipeline (nvq_quantize_8bit):
+//   logisticNQT(...)       — forward logistic
+//   scale and shift
+//   ConvertTo(int32) after +0.5  — round toward nearest for positive values
+//   StoreU to tmp[] + scalar clamp and byte-cast
+//
+// Cosine packing: nvq_cosine_8bit_packed returns an int64_t whose low 32 bits
+// are the IEEE-754 bits of `sum` and whose high 32 bits are `bMagnitude`, so
+// the caller can unpack with Float.intBitsToFloat without any heap allocation.
+// =============================================================================
+
+HWY_FLATTEN void nvq_quantize_8bit(const float *HWY_RESTRICT vector,
+                                   int length,
+                                   float alpha, float x0,
+                                   float minValue, float maxValue,
+                                   uint8_t *HWY_RESTRICT destination)
+{
+    using FloatTag = hn::ScalableTag<float>;
+    using Int32Tag = hn::RebindToSigned<FloatTag>;
+    FloatTag d_f;
+    Int32Tag d_i;
+    constexpr size_t kLanes = hn::Lanes(d_f);
+    alignas(64) int32_t tmp[kLanes];
+
+    float delta            = maxValue - minValue;
+    float scaledAlpha      = alpha / delta;
+    float scaledX0         = x0 * delta;
+    float logisticBias     = logisticNQT_scalar(minValue, scaledAlpha, scaledX0);
+    float invLogisticScale = 255.0f / (logisticNQT_scalar(maxValue, scaledAlpha, scaledX0) - logisticBias);
+
+    size_t i = 0;
+    for (; i + kLanes <= (size_t)length; i += kLanes) {
+        auto arr = hn::LoadU(d_f, vector + i);
+        arr = logisticNQT(d_f, arr, scaledAlpha, scaledX0);
+        arr = hn::Add(hn::Mul(hn::Sub(arr, hn::Set(d_f, logisticBias)),
+                              hn::Set(d_f, invLogisticScale)),
+                      hn::Set(d_f, 0.5f));
+        auto fi = hn::ConvertTo(d_i, arr);
+        hn::StoreU(fi, d_i, tmp);
+        for (size_t j = 0; j < kLanes; j++) {
+            int v = tmp[j];
+            destination[i + j] = (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
+        }
+    }
+    // Tail: LoadN zero-pads lanes beyond `remaining`; only write the first
+    // `remaining` bytes from tmp[] so the padding lanes are never observed.
+    const size_t remaining = (size_t)length - i;
+    if (remaining > 0) {
+        auto arr = hn::LoadN(d_f, vector + i, remaining);
+        arr = logisticNQT(d_f, arr, scaledAlpha, scaledX0);
+        arr = hn::Add(hn::Mul(hn::Sub(arr, hn::Set(d_f, logisticBias)),
+                              hn::Set(d_f, invLogisticScale)),
+                      hn::Set(d_f, 0.5f));
+        hn::StoreU(hn::ConvertTo(d_i, arr), d_i, tmp);
+        for (size_t j = 0; j < remaining; j++) {
+            int v = tmp[j];
+            destination[i + j] = (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
+        }
+    }
+}
+
+HWY_FLATTEN float nvq_loss(const float *HWY_RESTRICT vector,
+                           int length,
+                           float alpha, float x0,
+                           float minValue, float maxValue,
+                           int nBits)
+{
+    using FloatTag = hn::ScalableTag<float>;
+    using Int32Tag = hn::RebindToSigned<FloatTag>;
+    FloatTag d_f;
+    Int32Tag d_i;
+    constexpr size_t kLanes = hn::Lanes(d_f);
+
+    int   constant        = (1 << nBits) - 1;
+    float delta           = maxValue - minValue;
+    float scaledAlpha     = alpha / delta;
+    float invScaledAlpha  = delta / alpha;   // 1 / scaledAlpha
+    float scaledX0        = x0 * delta;
+    float logisticBias    = logisticNQT_scalar(minValue, scaledAlpha, scaledX0);
+    float logisticScale   = (logisticNQT_scalar(maxValue, scaledAlpha, scaledX0) - logisticBias) / (float)constant;
+    float invLogisticScale = 1.0f / logisticScale;
+
+    auto squaredSum = hn::Zero(d_f);
+
+    size_t i = 0;
+    for (; i + kLanes <= (size_t)length; i += kLanes) {
+        auto arr    = hn::LoadU(d_f, vector + i);
+        auto recArr = logisticNQT(d_f, arr, scaledAlpha, scaledX0);
+        recArr = hn::Mul(hn::Sub(recArr, hn::Set(d_f, logisticBias)),
+                         hn::Set(d_f, invLogisticScale));
+        // Round to nearest integer (add 0.5, truncate toward zero)
+        auto recInt = hn::ConvertTo(d_i, hn::Add(recArr, hn::Set(d_f, 0.5f)));
+        recArr = hn::ConvertTo(d_f, recInt);
+        recArr = hn::MulAdd(recArr, hn::Set(d_f, logisticScale), hn::Set(d_f, logisticBias));
+        recArr = logitNQT(d_f, recArr, invScaledAlpha, scaledX0);
+        auto diff = hn::Sub(arr, recArr);
+        squaredSum = hn::MulAdd(diff, diff, squaredSum);
+    }
+
+    float result = hn::ReduceSum(d_f, squaredSum);
+
+    // Tail: LoadN zero-pads; mask the diff so padding lanes don't contribute.
+    const size_t remaining = (size_t)length - i;
+    if (remaining > 0) {
+        const auto mask = hn::FirstN(d_f, remaining);
+        auto arr    = hn::LoadN(d_f, vector + i, remaining);
+        auto recArr = logisticNQT(d_f, arr, scaledAlpha, scaledX0);
+        recArr = hn::Mul(hn::Sub(recArr, hn::Set(d_f, logisticBias)),
+                         hn::Set(d_f, invLogisticScale));
+        auto recInt = hn::ConvertTo(d_i, hn::Add(recArr, hn::Set(d_f, 0.5f)));
+        recArr = hn::ConvertTo(d_f, recInt);
+        recArr = hn::MulAdd(recArr, hn::Set(d_f, logisticScale), hn::Set(d_f, logisticBias));
+        recArr = logitNQT(d_f, recArr, invScaledAlpha, scaledX0);
+        auto diff = hn::IfThenElseZero(mask, hn::Sub(arr, recArr));
+        result += hn::ReduceSum(d_f, hn::Mul(diff, diff));
+    }
+
+    return result;
+}
+
+HWY_FLATTEN float nvq_uniform_loss(const float *HWY_RESTRICT vector,
+                                   int length,
+                                   float minValue, float maxValue,
+                                   int nBits)
+{
+    using FloatTag = hn::ScalableTag<float>;
+    using Int32Tag = hn::RebindToSigned<FloatTag>;
+    FloatTag d_f;
+    Int32Tag d_i;
+    constexpr size_t kLanes = hn::Lanes(d_f);
+
+    float constant = (float)((1 << nBits) - 1);
+    float delta    = maxValue - minValue;
+
+    auto squaredSum = hn::Zero(d_f);
+
+    size_t i = 0;
+    for (; i + kLanes <= (size_t)length; i += kLanes) {
+        auto arr    = hn::LoadU(d_f, vector + i);
+        auto recArr = hn::Mul(hn::Sub(arr, hn::Set(d_f, minValue)),
+                              hn::Set(d_f, constant / delta));
+        auto recInt = hn::ConvertTo(d_i, hn::Add(recArr, hn::Set(d_f, 0.5f)));
+        recArr = hn::ConvertTo(d_f, recInt);
+        recArr = hn::MulAdd(recArr, hn::Set(d_f, delta / constant), hn::Set(d_f, minValue));
+        auto diff = hn::Sub(arr, recArr);
+        squaredSum = hn::MulAdd(diff, diff, squaredSum);
+    }
+
+    float result = hn::ReduceSum(d_f, squaredSum);
+
+    // Tail: LoadN zero-pads; mask the diff so padding lanes don't contribute.
+    const size_t remaining = (size_t)length - i;
+    if (remaining > 0) {
+        const auto mask = hn::FirstN(d_f, remaining);
+        auto arr    = hn::LoadN(d_f, vector + i, remaining);
+        auto recArr = hn::Mul(hn::Sub(arr, hn::Set(d_f, minValue)),
+                              hn::Set(d_f, constant / delta));
+        auto recInt = hn::ConvertTo(d_i, hn::Add(recArr, hn::Set(d_f, 0.5f)));
+        recArr = hn::ConvertTo(d_f, recInt);
+        recArr = hn::MulAdd(recArr, hn::Set(d_f, delta / constant), hn::Set(d_f, minValue));
+        auto diff = hn::IfThenElseZero(mask, hn::Sub(arr, recArr));
+        result += hn::ReduceSum(d_f, hn::Mul(diff, diff));
+    }
+
+    return result;
+}
+
+// Shared setup for the three 8-bit scoring kernels.
+// Computes the scalar parameters and loads u8→float using the same
+// PromoteTo chain as assemble_and_sum_f32_512.
+//
+// Inline helper: load kLanes bytes from `quantized+i`, convert to float,
+// apply dequantization (scale+bias → logitNQT).
+template <class FloatTag,
+          class Int32Tag  = hn::RebindToSigned<FloatTag>,
+          class Uint16Tag = hn::Rebind<uint16_t, Int32Tag>,
+          class Uint8Tag  = hn::Rebind<uint8_t,  Int32Tag>>
+HWY_INLINE hn::Vec<FloatTag>
+dequantize_bytes(FloatTag d_f, Int32Tag d_i, Uint16Tag d_u16, Uint8Tag d_u8,
+                 const uint8_t *HWY_RESTRICT quantized, size_t i,
+                 float logisticScale, float logisticBias,
+                 float invScaledAlpha, float scaledX0)
+{
+    const auto b_u8  = hn::LoadU(d_u8,  quantized + i);
+    const auto b_u16 = hn::PromoteTo(d_u16, b_u8);
+    const auto b_i32 = hn::PromoteTo(d_i,   b_u16);
+    auto vb = hn::ConvertTo(d_f, b_i32);
+    vb = hn::MulAdd(vb, hn::Set(d_f, logisticScale), hn::Set(d_f, logisticBias));
+    return logitNQT(d_f, vb, invScaledAlpha, scaledX0);
+}
+
+HWY_FLATTEN float nvq_square_l2_distance_8bit(const float    *HWY_RESTRICT vector,
+                                              const uint8_t  *HWY_RESTRICT quantized,
+                                              int length,
+                                              float alpha, float x0,
+                                              float minValue, float maxValue)
+{
+    using FloatTag  = hn::ScalableTag<float>;
+    using Int32Tag  = hn::RebindToSigned<FloatTag>;
+    using Uint16Tag = hn::Rebind<uint16_t, Int32Tag>;
+    using Uint8Tag  = hn::Rebind<uint8_t,  Int32Tag>;
+    FloatTag  d_f;
+    Int32Tag  d_i;
+    Uint16Tag d_u16;
+    Uint8Tag  d_u8;
+    constexpr size_t kLanes = hn::Lanes(d_f);
+
+    float delta          = maxValue - minValue;
+    float scaledAlpha    = alpha / delta;
+    float invScaledAlpha = delta / alpha;
+    float scaledX0       = x0 * delta;
+    float logisticBias   = logisticNQT_scalar(minValue, scaledAlpha, scaledX0);
+    float logisticScale  = (logisticNQT_scalar(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255.0f;
+
+    auto squaredSum = hn::Zero(d_f);
+
+    size_t i = 0;
+    for (; i + kLanes <= (size_t)length; i += kLanes) {
+        auto va   = hn::LoadU(d_f, vector + i);
+        auto vb   = dequantize_bytes(d_f, d_i, d_u16, d_u8, quantized, i,
+                                     logisticScale, logisticBias, invScaledAlpha, scaledX0);
+        auto diff = hn::Sub(va, vb);
+        squaredSum = hn::MulAdd(diff, diff, squaredSum);
+    }
+
+    float result = hn::ReduceSum(d_f, squaredSum);
+
+    // Tail: LoadN zero-pads both float and byte inputs; mask diff to exclude
+    // padding lanes from the squared sum.
+    const size_t remaining = (size_t)length - i;
+    if (remaining > 0) {
+        const auto mask  = hn::FirstN(d_f, remaining);
+        auto va          = hn::LoadN(d_f,  vector    + i, remaining);
+        const auto b_u8  = hn::LoadN(d_u8, quantized + i, remaining);
+        const auto b_u16 = hn::PromoteTo(d_u16, b_u8);
+        const auto b_i32 = hn::PromoteTo(d_i,   b_u16);
+        auto vb          = hn::MulAdd(hn::ConvertTo(d_f, b_i32),
+                                      hn::Set(d_f, logisticScale),
+                                      hn::Set(d_f, logisticBias));
+        vb = logitNQT(d_f, vb, invScaledAlpha, scaledX0);
+        auto diff = hn::IfThenElseZero(mask, hn::Sub(va, vb));
+        result += hn::ReduceSum(d_f, hn::Mul(diff, diff));
+    }
+
+    return result;
+}
+
+HWY_FLATTEN float nvq_dot_product_8bit(const float   *HWY_RESTRICT vector,
+                                       const uint8_t *HWY_RESTRICT quantized,
+                                       int length,
+                                       float alpha, float x0,
+                                       float minValue, float maxValue)
+{
+    using FloatTag  = hn::ScalableTag<float>;
+    using Int32Tag  = hn::RebindToSigned<FloatTag>;
+    using Uint16Tag = hn::Rebind<uint16_t, Int32Tag>;
+    using Uint8Tag  = hn::Rebind<uint8_t,  Int32Tag>;
+    FloatTag  d_f;
+    Int32Tag  d_i;
+    Uint16Tag d_u16;
+    Uint8Tag  d_u8;
+    constexpr size_t kLanes = hn::Lanes(d_f);
+
+    float delta          = maxValue - minValue;
+    float scaledAlpha    = alpha / delta;
+    float invScaledAlpha = delta / alpha;
+    float scaledX0       = x0 * delta;
+    float logisticBias   = logisticNQT_scalar(minValue, scaledAlpha, scaledX0);
+    float logisticScale  = (logisticNQT_scalar(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255.0f;
+
+    auto dotProd = hn::Zero(d_f);
+
+    size_t i = 0;
+    for (; i + kLanes <= (size_t)length; i += kLanes) {
+        auto va = hn::LoadU(d_f, vector + i);
+        auto vb = dequantize_bytes(d_f, d_i, d_u16, d_u8, quantized, i,
+                                   logisticScale, logisticBias, invScaledAlpha, scaledX0);
+        dotProd = hn::MulAdd(va, vb, dotProd);
+    }
+
+    float result = hn::ReduceSum(d_f, dotProd);
+
+    // Tail: LoadN zero-pads va; 0 * vb = 0 for padding lanes, so no masking
+    // is needed — the zero-padded float inputs naturally contribute nothing.
+    const size_t remaining = (size_t)length - i;
+    if (remaining > 0) {
+        auto va          = hn::LoadN(d_f,  vector    + i, remaining);
+        const auto b_u8  = hn::LoadN(d_u8, quantized + i, remaining);
+        const auto b_u16 = hn::PromoteTo(d_u16, b_u8);
+        const auto b_i32 = hn::PromoteTo(d_i,   b_u16);
+        auto vb          = hn::MulAdd(hn::ConvertTo(d_f, b_i32),
+                                      hn::Set(d_f, logisticScale),
+                                      hn::Set(d_f, logisticBias));
+        vb = logitNQT(d_f, vb, invScaledAlpha, scaledX0);
+        result += hn::ReduceSum(d_f, hn::Mul(va, vb));
+    }
+
+    return result;
+}
+
+// Returns sum and bMagnitude packed into a single int64_t:
+//   bits [31:0]  = IEEE-754 bits of sum
+//   bits [63:32] = IEEE-754 bits of bMagnitude
+// The Java caller unpacks with Float.intBitsToFloat — no heap allocation needed.
+HWY_FLATTEN int64_t nvq_cosine_8bit_packed(const float   *HWY_RESTRICT vector,
+                                           const uint8_t *HWY_RESTRICT quantized,
+                                           int length,
+                                           float alpha, float x0,
+                                           float minValue, float maxValue,
+                                           const float   *HWY_RESTRICT centroid)
+{
+    using FloatTag  = hn::ScalableTag<float>;
+    using Int32Tag  = hn::RebindToSigned<FloatTag>;
+    using Uint16Tag = hn::Rebind<uint16_t, Int32Tag>;
+    using Uint8Tag  = hn::Rebind<uint8_t,  Int32Tag>;
+    FloatTag  d_f;
+    Int32Tag  d_i;
+    Uint16Tag d_u16;
+    Uint8Tag  d_u8;
+    constexpr size_t kLanes = hn::Lanes(d_f);
+
+    float delta          = maxValue - minValue;
+    float scaledAlpha    = alpha / delta;
+    float invScaledAlpha = delta / alpha;
+    float scaledX0       = x0 * delta;
+    float logisticBias   = logisticNQT_scalar(minValue, scaledAlpha, scaledX0);
+    float logisticScale  = (logisticNQT_scalar(maxValue, scaledAlpha, scaledX0) - logisticBias) / 255.0f;
+
+    auto sumVec  = hn::Zero(d_f);
+    auto bMagVec = hn::Zero(d_f);
+
+    size_t i = 0;
+    for (; i + kLanes <= (size_t)length; i += kLanes) {
+        auto va = hn::LoadU(d_f, vector   + i);
+        auto vc = hn::LoadU(d_f, centroid + i);
+        auto vb = dequantize_bytes(d_f, d_i, d_u16, d_u8, quantized, i,
+                                   logisticScale, logisticBias, invScaledAlpha, scaledX0);
+        vb = hn::Add(vb, vc);
+        sumVec  = hn::MulAdd(va, vb, sumVec);
+        bMagVec = hn::MulAdd(vb, vb, bMagVec);
+    }
+
+    float sum  = hn::ReduceSum(d_f, sumVec);
+    float bMag = hn::ReduceSum(d_f, bMagVec);
+
+    // Tail: LoadN zero-pads va and vc.  Zero out vb for the tail lanes too
+    // (via FirstN mask) before adding the centroid, so both sum (va*vb_c)
+    // and bMagnitude (vb_c^2) naturally contribute 0 for padding lanes.
+    const size_t remaining = (size_t)length - i;
+    if (remaining > 0) {
+        const auto mask  = hn::FirstN(d_f, remaining);
+        auto va          = hn::LoadN(d_f,  vector    + i, remaining);
+        auto vc          = hn::LoadN(d_f,  centroid  + i, remaining);
+        const auto b_u8  = hn::LoadN(d_u8, quantized + i, remaining);
+        const auto b_u16 = hn::PromoteTo(d_u16, b_u8);
+        const auto b_i32 = hn::PromoteTo(d_i,   b_u16);
+        auto vb          = hn::MulAdd(hn::ConvertTo(d_f, b_i32),
+                                      hn::Set(d_f, logisticScale),
+                                      hn::Set(d_f, logisticBias));
+        vb = logitNQT(d_f, vb, invScaledAlpha, scaledX0);
+        // Mask vb so padding lanes are 0; then vb+vc = 0+0 = 0 for them.
+        auto vb_c = hn::Add(hn::IfThenElseZero(mask, vb), vc);
+        sum  += hn::ReduceSum(d_f, hn::Mul(va, vb_c));
+        bMag += hn::ReduceSum(d_f, hn::Mul(vb_c, vb_c));
+    }
+
+    int32_t sum_bits, bmag_bits;
+    memcpy(&sum_bits,  &sum,  sizeof(float));
+    memcpy(&bmag_bits, &bMag, sizeof(float));
+    return ((int64_t)bmag_bits << 32) | (int64_t)(uint32_t)sum_bits;
+}

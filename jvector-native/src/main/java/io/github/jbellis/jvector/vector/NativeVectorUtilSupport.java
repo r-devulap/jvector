@@ -78,6 +78,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         // baseOffsets is a pointer into a PQ chunk - we need to index into it by baseOffsetsOffset and provide baseOffsetsLength to the native code
         return NativeSimdOps.assemble_and_sum_f32_512(((MemorySegmentVectorFloat) data).get(), dataBase, ((MemorySegmentByteSequence) baseOffsets).get(), baseOffsetsOffset, (long) baseOffsetsLength);
     }
+
     @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
         NativeSimdOps.add_in_place_f32(((MemorySegmentVectorFloat) v1).get(), ((MemorySegmentVectorFloat) v2).get(), v1.length());
@@ -139,6 +140,7 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         // encoded is a pointer into a PQ chunk - we need to index into it by encodedOffset and provide encodedLength to the native code
         return NativeSimdOps.pq_decoded_cosine_similarity_f32_512(((MemorySegmentByteSequence) encoded).get(), encodedOffset, encodedLength, clusterCount, ((MemorySegmentVectorFloat) partialSums).get(), ((MemorySegmentVectorFloat) aMagnitude).get(), bMagnitude);
     }
+
     @Override
     public float dotProduct(VectorFloat<?> v1, VectorFloat<?> v2) {
         return NativeSimdOps.dot_product_f32_512_native(((MemorySegmentVectorFloat) v1).get(), 0,
@@ -193,4 +195,68 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         }
     }
 
+    @Override
+    public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {
+        // The native C++ kernels access bytes sequentially; no interleave shuffle needed.
+    }
+
+    @Override
+    public void nvqQuantize8bit(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, ByteSequence<?> destination) {
+        NativeSimdOps.nvq_quantize_8bit(
+                ((MemorySegmentVectorFloat) vector).get(),
+                vector.length(),
+                alpha, x0, minValue, maxValue,
+                ((MemorySegmentByteSequence) destination).get());
+    }
+
+    @Override
+    public float nvqLoss(VectorFloat<?> vector, float alpha, float x0, float minValue, float maxValue, int nBits) {
+        return NativeSimdOps.nvq_loss(
+                ((MemorySegmentVectorFloat) vector).get(),
+                vector.length(),
+                alpha, x0, minValue, maxValue, nBits);
+    }
+
+    @Override
+    public float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits) {
+        return NativeSimdOps.nvq_uniform_loss(
+                ((MemorySegmentVectorFloat) vector).get(),
+                vector.length(),
+                minValue, maxValue, nBits);
+    }
+
+    @Override
+    public float nvqSquareL2Distance8bit(VectorFloat<?> vector, ByteSequence<?> quantizedVector,
+                                         float alpha, float x0, float minValue, float maxValue) {
+        return NativeSimdOps.nvq_square_l2_distance_8bit(
+                ((MemorySegmentVectorFloat) vector).get(),
+                ((MemorySegmentByteSequence) quantizedVector).get(),
+                vector.length(),
+                alpha, x0, minValue, maxValue);
+    }
+
+    @Override
+    public float nvqDotProduct8bit(VectorFloat<?> vector, ByteSequence<?> quantizedVector,
+                                   float alpha, float x0, float minValue, float maxValue) {
+        return NativeSimdOps.nvq_dot_product_8bit(
+                ((MemorySegmentVectorFloat) vector).get(),
+                ((MemorySegmentByteSequence) quantizedVector).get(),
+                vector.length(),
+                alpha, x0, minValue, maxValue);
+    }
+
+    @Override
+    public float[] nvqCosine8bit(VectorFloat<?> vector, ByteSequence<?> quantizedVector,
+                                 float alpha, float x0, float minValue, float maxValue,
+                                 VectorFloat<?> centroid) {
+        long packed = NativeSimdOps.nvq_cosine_8bit_packed(
+                ((MemorySegmentVectorFloat) vector).get(),
+                ((MemorySegmentByteSequence) quantizedVector).get(),
+                vector.length(),
+                alpha, x0, minValue, maxValue,
+                ((MemorySegmentVectorFloat) centroid).get());
+        float sum  = Float.intBitsToFloat((int)(packed & 0xFFFFFFFFL));
+        float bMag = Float.intBitsToFloat((int)(packed >>> 32));
+        return new float[]{sum, bMag};
+    }
 }

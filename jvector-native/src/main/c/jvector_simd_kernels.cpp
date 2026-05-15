@@ -1177,12 +1177,24 @@ HWY_FLATTEN float nvq_uniform_loss(const float *HWY_RESTRICT vector,
     return result;
 }
 
-// Shared setup for the three 8-bit scoring kernels.
-// Computes the scalar parameters and loads u8→float using the same
-// PromoteTo chain as assemble_and_sum_f32.
+// ─────────────────────────────────────────────────────────────────────────────
+// Two dequantization helpers — used by the three NVQ 8-bit scoring kernels.
 //
-// Inline helper: load kLanes bytes from `quantized+i`, convert to float,
-// apply dequantization (scale+bias → logitNQT).
+// dequantize_bytes  (tail / non-hot path)
+//   Loads kLanes uint8 values via a narrow u8 tag, widens to int32 through
+//   two PromoteTo calls, converts to float, then applies scale+bias+logitNQT.
+//   Used only for the unaligned tail elements after the main FastLanes loop;
+//   those elements' query floats are in their original (un-shuffled) order.
+//
+// dequantize_bytes_fastlanes  (hot path)
+//   Accepts a Vec<Int32Tag> that is a full-width byte vector BitCast-ed to
+//   kLanes int32 lanes (i.e., 4*kLanes bytes loaded in one 512-bit register).
+//   Extracts the `part`-th byte from each int32 lane via shift-right + AND,
+//   converts to float, and applies scale+bias+logitNQT.  All operations run
+//   at the native SIMD width — no widening, no register-width changes.
+//   Mirrors the Panama FastLanes strategy:
+//   https://www.vldb.org/pvldb/vol16/p2132-afroozeh.pdf
+// ─────────────────────────────────────────────────────────────────────────────
 template <class FloatTag,
           class Int32Tag  = hn::RebindToSigned<FloatTag>,
           class Uint16Tag = hn::Rebind<uint16_t, Int32Tag>,
@@ -1201,20 +1213,41 @@ dequantize_bytes(FloatTag d_f, Int32Tag d_i, Uint16Tag d_u16, Uint8Tag d_u8,
     return logitNQT(d_f, vb, invScaledAlpha, scaledX0);
 }
 
+template <class FloatTag,
+          class Int32Tag = hn::RebindToSigned<FloatTag>>
+HWY_INLINE hn::Vec<FloatTag>
+dequantize_bytes_fastlanes(FloatTag d_f, Int32Tag d_i,
+                           hn::Vec<Int32Tag> as_ints, int part,
+                           float logisticScale, float logisticBias,
+                           float invScaledAlpha, float scaledX0)
+{
+    // Extract the `part`-th byte from each int32 lane, then convert to float.
+    // ShiftRightSame on a signed tag does arithmetic shift, but the AND with
+    // 0xFF zeroes the sign-extended upper bits, giving an unsigned 0-255 value.
+    auto shifted = hn::ShiftRightSame(as_ints, 8 * part);
+    auto masked  = hn::And(shifted, hn::Set(d_i, 0xFF));
+    auto vb      = hn::ConvertTo(d_f, masked);
+    vb = hn::MulAdd(vb, hn::Set(d_f, logisticScale), hn::Set(d_f, logisticBias));
+    return logitNQT(d_f, vb, invScaledAlpha, scaledX0);
+}
+
 HWY_FLATTEN float nvq_square_l2_distance_8bit(const float    *HWY_RESTRICT vector,
                                               const uint8_t  *HWY_RESTRICT quantized,
                                               size_t length,
                                               float alpha, float x0,
                                               float minValue, float maxValue)
 {
-    using FloatTag  = hn::ScalableTag<float>;
-    using Int32Tag  = hn::RebindToSigned<FloatTag>;
-    using Uint16Tag = hn::Rebind<uint16_t, Int32Tag>;
-    using Uint8Tag  = hn::Rebind<uint8_t,  Int32Tag>;
-    FloatTag  d_f;
-    Int32Tag  d_i;
-    Uint16Tag d_u16;
-    Uint8Tag  d_u8;
+    using FloatTag   = hn::ScalableTag<float>;
+    using Int32Tag   = hn::RebindToSigned<FloatTag>;
+    using Uint8x4Tag = hn::ScalableTag<uint8_t>;   // 4*kLanes lanes — same total width as FloatTag
+    // Tail-path tags (narrower, used only outside the hot loop)
+    using Uint16Tag  = hn::Rebind<uint16_t, Int32Tag>;
+    using Uint8Tag   = hn::Rebind<uint8_t,  Int32Tag>;
+    FloatTag   d_f;
+    Int32Tag   d_i;
+    Uint8x4Tag d_b;
+    Uint16Tag  d_u16;
+    Uint8Tag   d_u8;
     constexpr size_t kLanes = hn::MaxLanes(d_f);
 
     float delta          = maxValue - minValue;
@@ -1226,19 +1259,37 @@ HWY_FLATTEN float nvq_square_l2_distance_8bit(const float    *HWY_RESTRICT vecto
 
     auto squaredSum = hn::Zero(d_f);
 
+    // FastLanes main loop: load 4*kLanes bytes per iteration (full native width),
+    // reinterpret as kLanes int32 values, and extract one byte per int32 via
+    // shift+mask for each of the 4 parts.  Requires the query vector to have
+    // been pre-shuffled by nvq_shuffle_query_in_place_8bit.
     size_t i = 0;
+    for (; i + 4 * kLanes <= length; i += 4 * kLanes) {
+        auto bytes   = hn::LoadU(d_b, quantized + i);
+        auto as_ints = hn::BitCast(d_i, bytes);
+        for (int part = 0; part < 4; ++part) {
+            auto va   = hn::LoadU(d_f, vector + i + part * kLanes);
+            auto vb   = dequantize_bytes_fastlanes(d_f, d_i, as_ints, part,
+                                                   logisticScale, logisticBias,
+                                                   invScaledAlpha, scaledX0);
+            auto diff = hn::Sub(va, vb);
+            squaredSum = hn::MulAdd(diff, diff, squaredSum);
+        }
+    }
+
+    float result = hn::ReduceSum(d_f, squaredSum);
+
+    // kLanes-aligned tail: query floats are un-shuffled here, so use the
+    // sequential PromoteTo path which reads bytes in natural order.
     for (; i + kLanes <= length; i += kLanes) {
         auto va   = hn::LoadU(d_f, vector + i);
         auto vb   = dequantize_bytes(d_f, d_i, d_u16, d_u8, quantized, i,
                                      logisticScale, logisticBias, invScaledAlpha, scaledX0);
         auto diff = hn::Sub(va, vb);
-        squaredSum = hn::MulAdd(diff, diff, squaredSum);
+        result += hn::ReduceSum(d_f, hn::Mul(diff, diff));
     }
 
-    float result = hn::ReduceSum(d_f, squaredSum);
-
-    // Tail: LoadN zero-pads both float and byte inputs; mask diff to exclude
-    // padding lanes from the squared sum.
+    // Sub-kLanes tail: LoadN zero-pads; mask diff to exclude padding lanes.
     const size_t remaining = length - i;
     if (remaining > 0) {
         const auto mask  = hn::FirstN(d_f, remaining);
@@ -1263,14 +1314,16 @@ HWY_FLATTEN float nvq_dot_product_8bit(const float   *HWY_RESTRICT vector,
                                        float alpha, float x0,
                                        float minValue, float maxValue)
 {
-    using FloatTag  = hn::ScalableTag<float>;
-    using Int32Tag  = hn::RebindToSigned<FloatTag>;
-    using Uint16Tag = hn::Rebind<uint16_t, Int32Tag>;
-    using Uint8Tag  = hn::Rebind<uint8_t,  Int32Tag>;
-    FloatTag  d_f;
-    Int32Tag  d_i;
-    Uint16Tag d_u16;
-    Uint8Tag  d_u8;
+    using FloatTag   = hn::ScalableTag<float>;
+    using Int32Tag   = hn::RebindToSigned<FloatTag>;
+    using Uint8x4Tag = hn::ScalableTag<uint8_t>;   // 4*kLanes lanes — same total width as FloatTag
+    using Uint16Tag  = hn::Rebind<uint16_t, Int32Tag>;
+    using Uint8Tag   = hn::Rebind<uint8_t,  Int32Tag>;
+    FloatTag   d_f;
+    Int32Tag   d_i;
+    Uint8x4Tag d_b;
+    Uint16Tag  d_u16;
+    Uint8Tag   d_u8;
     constexpr size_t kLanes = hn::MaxLanes(d_f);
 
     float delta          = maxValue - minValue;
@@ -1282,18 +1335,31 @@ HWY_FLATTEN float nvq_dot_product_8bit(const float   *HWY_RESTRICT vector,
 
     auto dotProd = hn::Zero(d_f);
 
+    // FastLanes main loop: full-width byte load, shift+mask extraction.
     size_t i = 0;
-    for (; i + kLanes <= length; i += kLanes) {
-        auto va = hn::LoadU(d_f, vector + i);
-        auto vb = dequantize_bytes(d_f, d_i, d_u16, d_u8, quantized, i,
-                                   logisticScale, logisticBias, invScaledAlpha, scaledX0);
-        dotProd = hn::MulAdd(va, vb, dotProd);
+    for (; i + 4 * kLanes <= length; i += 4 * kLanes) {
+        auto bytes   = hn::LoadU(d_b, quantized + i);
+        auto as_ints = hn::BitCast(d_i, bytes);
+        for (int part = 0; part < 4; ++part) {
+            auto va = hn::LoadU(d_f, vector + i + part * kLanes);
+            auto vb = dequantize_bytes_fastlanes(d_f, d_i, as_ints, part,
+                                                 logisticScale, logisticBias,
+                                                 invScaledAlpha, scaledX0);
+            dotProd = hn::MulAdd(va, vb, dotProd);
+        }
     }
 
     float result = hn::ReduceSum(d_f, dotProd);
 
-    // Tail: LoadN zero-pads va; 0 * vb = 0 for padding lanes, so no masking
-    // is needed — the zero-padded float inputs naturally contribute nothing.
+    // kLanes-aligned tail: un-shuffled query, sequential byte access.
+    for (; i + kLanes <= length; i += kLanes) {
+        auto va = hn::LoadU(d_f, vector + i);
+        auto vb = dequantize_bytes(d_f, d_i, d_u16, d_u8, quantized, i,
+                                   logisticScale, logisticBias, invScaledAlpha, scaledX0);
+        result += hn::ReduceSum(d_f, hn::Mul(va, vb));
+    }
+
+    // Sub-kLanes tail: LoadN zero-pads va; 0 * vb = 0 for padding lanes.
     const size_t remaining = length - i;
     if (remaining > 0) {
         auto va          = hn::LoadN(d_f,  vector    + i, remaining);
@@ -1310,6 +1376,56 @@ HWY_FLATTEN float nvq_dot_product_8bit(const float   *HWY_RESTRICT vector,
     return result;
 }
 
+// nvq_shuffle_query_in_place_8bit
+//
+// Pre-processes the float query vector in-place so that nvq_cosine_8bit_packed,
+// nvq_dot_product_8bit, and nvq_square_l2_distance_8bit can use the FastLanes
+// byte-extraction strategy.  Only complete blocks of 4*kLanes floats are
+// transposed; the remaining tail elements are left in their original order and
+// processed by the sequential tail path inside each scoring kernel.
+//
+// The permutation applied is an in-place matrix transpose of 4×kLanes blocks:
+// after the shuffle, shuffled[j*kLanes + k] == original[k*4 + j], so that
+// when the scoring kernel extracts byte `j` from int32 slot `k` (via
+// ShiftRight(8*j) & 0xFF), it lines up with query float at position j*kLanes+k.
+HWY_FLATTEN void nvq_shuffle_query_in_place_8bit(float *HWY_RESTRICT vector,
+                                                  size_t length)
+{
+    using FloatTag = hn::ScalableTag<float>;
+    FloatTag d_f;
+    const size_t kLanes = hn::Lanes(d_f);
+    const size_t step   = 4 * kLanes;   // block size = number of bytes in a full-width vector
+    const size_t mn1    = step - 1;
+
+    // Maximum step across all ISAs compiled for: 4 * 16 = 64 (AVX-512).
+    // Declared outside the loop so the stack frame is allocated once.
+    constexpr size_t kMaxStep = 4 * hn::MaxLanes(FloatTag{});
+    bool visited[kMaxStep];
+
+    size_t offset = 0;
+    while (offset + step <= length) {
+        float *arr = vector + offset;
+        memset(visited, 0, step);  // only zero the portion we will inspect
+
+        // In-place cyclic transposition: for each unvisited cycle, rotate
+        // elements along the cycle defined by a -> (kLanes * a) % mn1.
+        // This maps shuffled[p] = original[(p % kLanes) * 4 + (p / kLanes)],
+        // which is the inverse of the FastLanes interleaving.
+        for (size_t cycle = 1; cycle < step; ++cycle) {
+            if (visited[cycle]) continue;
+            size_t a = cycle;
+            do {
+                a = (a == mn1) ? mn1 : (kLanes * a) % mn1;
+                float temp = arr[a];
+                arr[a]     = arr[cycle];
+                arr[cycle] = temp;
+                visited[a] = true;
+            } while (a != cycle);
+        }
+        offset += step;
+    }
+}
+
 // Returns sum and bMagnitude packed into a single int64_t:
 //   bits [31:0]  = IEEE-754 bits of sum
 //   bits [63:32] = IEEE-754 bits of bMagnitude
@@ -1321,14 +1437,16 @@ HWY_FLATTEN int64_t nvq_cosine_8bit_packed(const float   *HWY_RESTRICT vector,
                                            float minValue, float maxValue,
                                            const float   *HWY_RESTRICT centroid)
 {
-    using FloatTag  = hn::ScalableTag<float>;
-    using Int32Tag  = hn::RebindToSigned<FloatTag>;
-    using Uint16Tag = hn::Rebind<uint16_t, Int32Tag>;
-    using Uint8Tag  = hn::Rebind<uint8_t,  Int32Tag>;
-    FloatTag  d_f;
-    Int32Tag  d_i;
-    Uint16Tag d_u16;
-    Uint8Tag  d_u8;
+    using FloatTag   = hn::ScalableTag<float>;
+    using Int32Tag   = hn::RebindToSigned<FloatTag>;
+    using Uint8x4Tag = hn::ScalableTag<uint8_t>;   // 4*kLanes lanes — same total width as FloatTag
+    using Uint16Tag  = hn::Rebind<uint16_t, Int32Tag>;
+    using Uint8Tag   = hn::Rebind<uint8_t,  Int32Tag>;
+    FloatTag   d_f;
+    Int32Tag   d_i;
+    Uint8x4Tag d_b;
+    Uint16Tag  d_u16;
+    Uint8Tag   d_u8;
     constexpr size_t kLanes = hn::MaxLanes(d_f);
 
     float delta          = maxValue - minValue;
@@ -1341,23 +1459,39 @@ HWY_FLATTEN int64_t nvq_cosine_8bit_packed(const float   *HWY_RESTRICT vector,
     auto sumVec  = hn::Zero(d_f);
     auto bMagVec = hn::Zero(d_f);
 
+    // FastLanes main loop: full-width byte load, shift+mask extraction.
     size_t i = 0;
+    for (; i + 4 * kLanes <= length; i += 4 * kLanes) {
+        auto bytes   = hn::LoadU(d_b, quantized + i);
+        auto as_ints = hn::BitCast(d_i, bytes);
+        for (int part = 0; part < 4; ++part) {
+            auto va = hn::LoadU(d_f, vector   + i + part * kLanes);
+            auto vc = hn::LoadU(d_f, centroid + i + part * kLanes);
+            auto vb = dequantize_bytes_fastlanes(d_f, d_i, as_ints, part,
+                                                 logisticScale, logisticBias,
+                                                 invScaledAlpha, scaledX0);
+            vb = hn::Add(vb, vc);
+            sumVec  = hn::MulAdd(va, vb, sumVec);
+            bMagVec = hn::MulAdd(vb, vb, bMagVec);
+        }
+    }
+
+    float sum  = hn::ReduceSum(d_f, sumVec);
+    float bMag = hn::ReduceSum(d_f, bMagVec);
+
+    // kLanes-aligned tail: un-shuffled query and centroid, sequential bytes.
     for (; i + kLanes <= length; i += kLanes) {
         auto va = hn::LoadU(d_f, vector   + i);
         auto vc = hn::LoadU(d_f, centroid + i);
         auto vb = dequantize_bytes(d_f, d_i, d_u16, d_u8, quantized, i,
                                    logisticScale, logisticBias, invScaledAlpha, scaledX0);
         vb = hn::Add(vb, vc);
-        sumVec  = hn::MulAdd(va, vb, sumVec);
-        bMagVec = hn::MulAdd(vb, vb, bMagVec);
+        sum  += hn::ReduceSum(d_f, hn::Mul(va, vb));
+        bMag += hn::ReduceSum(d_f, hn::Mul(vb, vb));
     }
 
-    float sum  = hn::ReduceSum(d_f, sumVec);
-    float bMag = hn::ReduceSum(d_f, bMagVec);
-
-    // Tail: LoadN zero-pads va and vc.  Zero out vb for the tail lanes too
-    // (via FirstN mask) before adding the centroid, so both sum (va*vb_c)
-    // and bMagnitude (vb_c^2) naturally contribute 0 for padding lanes.
+    // Sub-kLanes tail: LoadN zero-pads va and vc.  Mask vb before adding the
+    // centroid so padding lanes contribute 0 to both sum and bMagnitude.
     const size_t remaining = length - i;
     if (remaining > 0) {
         const auto mask  = hn::FirstN(d_f, remaining);
@@ -1370,7 +1504,6 @@ HWY_FLATTEN int64_t nvq_cosine_8bit_packed(const float   *HWY_RESTRICT vector,
                                       hn::Set(d_f, logisticScale),
                                       hn::Set(d_f, logisticBias));
         vb = logitNQT(d_f, vb, invScaledAlpha, scaledX0);
-        // Mask vb so padding lanes are 0; then vb+vc = 0+0 = 0 for them.
         auto vb_c = hn::Add(hn::IfThenElseZero(mask, vb), vc);
         sum  += hn::ReduceSum(d_f, hn::Mul(va, vb_c));
         bMag += hn::ReduceSum(d_f, hn::Mul(vb_c, vb_c));

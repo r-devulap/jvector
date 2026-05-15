@@ -81,6 +81,7 @@ struct KernelVTable {
                                       const unsigned char *, size_t,
                                       float, float, float, float,
                                       const float *);
+    void    (*nvq_shuffle_query_in_place_8bit)(float *, size_t);
 };
 
 // One pre-filled vtable per ISA.  These are constant data; no heap allocation.
@@ -106,6 +107,7 @@ struct KernelVTable {
         ISA::nvq_square_l2_distance_8bit,                                \
         ISA::nvq_dot_product_8bit,                                       \
         ISA::nvq_cosine_8bit_packed,                                     \
+        ISA::nvq_shuffle_query_in_place_8bit,                            \
     }
 
 DEFINE_ISA_VTABLE(AVX3);
@@ -322,4 +324,9 @@ int64_t nvq_cosine_8bit_packed(const float *vector,
     return kernels.nvq_cosine_8bit_packed(vector, quantized, length,
                                           alpha, x0, minValue, maxValue,
                                           centroid);
+}
+
+void nvq_shuffle_query_in_place_8bit(float *vector, size_t length)
+{
+    kernels.nvq_shuffle_query_in_place_8bit(vector, length);
 }

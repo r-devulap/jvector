@@ -48,6 +48,7 @@ JVECTOR_SIMD_API float   nvq_uniform_loss(const float* vector, size_t length, fl
 JVECTOR_SIMD_API float   nvq_square_l2_distance_8bit(const float* vector, const unsigned char* quantized, size_t length, float alpha, float x0, float minValue, float maxValue);
 JVECTOR_SIMD_API float   nvq_dot_product_8bit(const float* vector, const unsigned char* quantized, size_t length, float alpha, float x0, float minValue, float maxValue);
 JVECTOR_SIMD_API int64_t nvq_cosine_8bit_packed(const float* vector, const unsigned char* quantized, size_t length, float alpha, float x0, float minValue, float maxValue, const float* centroid);
+JVECTOR_SIMD_API void    nvq_shuffle_query_in_place_8bit(float* vector, size_t length);
 
 /* Element-wise in-place vector arithmetic */
 JVECTOR_SIMD_API void    add_in_place_f32(float* v1, const float* v2, size_t length);

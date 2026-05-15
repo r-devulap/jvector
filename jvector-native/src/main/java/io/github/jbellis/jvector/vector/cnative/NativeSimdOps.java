@@ -2033,6 +2033,64 @@ public class NativeSimdOps {
         }
     }
 
+    private static class nvq_shuffle_query_in_place_8bit {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("nvq_shuffle_query_in_place_8bit");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void nvq_shuffle_query_in_place_8bit(float *vector, size_t length)
+     * }
+     */
+    public static FunctionDescriptor nvq_shuffle_query_in_place_8bit$descriptor() {
+        return nvq_shuffle_query_in_place_8bit.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void nvq_shuffle_query_in_place_8bit(float *vector, size_t length)
+     * }
+     */
+    public static MethodHandle nvq_shuffle_query_in_place_8bit$handle() {
+        return nvq_shuffle_query_in_place_8bit.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void nvq_shuffle_query_in_place_8bit(float *vector, size_t length)
+     * }
+     */
+    public static MemorySegment nvq_shuffle_query_in_place_8bit$address() {
+        return nvq_shuffle_query_in_place_8bit.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void nvq_shuffle_query_in_place_8bit(float *vector, size_t length)
+     * }
+     */
+    public static void nvq_shuffle_query_in_place_8bit(MemorySegment vector, long length) {
+        var mh$ = nvq_shuffle_query_in_place_8bit.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("nvq_shuffle_query_in_place_8bit", vector, length);
+            }
+            mh$.invokeExact(vector, length);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class add_in_place_f32 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             NativeSimdOps.C_POINTER,

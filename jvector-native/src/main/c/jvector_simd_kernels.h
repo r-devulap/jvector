@@ -106,6 +106,8 @@
                                    float alpha, float x0, \
                                    float minValue, float maxValue, \
                                    const float *centroid); \
+    void nvq_shuffle_query_in_place_8bit(float *vector, \
+                                         size_t length); \
     }
 
 DECLARE_SIMD_KERNELS(AVX3)

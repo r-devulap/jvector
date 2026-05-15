@@ -197,7 +197,9 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public void nvqShuffleQueryInPlace8bit(VectorFloat<?> vector) {
-        // The native C++ kernels access bytes sequentially; no interleave shuffle needed.
+        NativeSimdOps.nvq_shuffle_query_in_place_8bit(
+                ((MemorySegmentVectorFloat) vector).get(),
+                (long) vector.length());
     }
 
     @Override

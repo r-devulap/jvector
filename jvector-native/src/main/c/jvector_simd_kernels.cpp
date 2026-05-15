@@ -668,10 +668,12 @@ HWY_INLINE float AssembleAndSumImpl(
     const hn::Rebind<uint8_t,  hn::RebindToSigned<FloatTag>> uint8Tag;
     const size_t lanes = hn::Lanes(floatTag);
 
-    const auto dataBaseVec   = hn::Set(int32Tag, dataBase);
-    const auto laneIncrement = hn::Set(int32Tag, static_cast<int32_t>(lanes));
-    auto indexVec = hn::Iota(int32Tag, 0);
-    auto sumVec   = hn::Zero(floatTag);
+    // Precompute scaleVec = [0, db, 2*db, ..., (lanes-1)*db] once.
+    // This eliminates a 512-bit VPMULLD on every iteration; the per-iteration
+    // base (ii*dataBase) is a scalar that the compiler strength-reduces to an add.
+    const auto scaleVec = hn::Mul(hn::Iota(int32Tag, 0),
+                                  hn::Set(int32Tag, dataBase));
+    auto sumVec = hn::Zero(floatTag);
 
     size_t ii = 0;
     for (; ii + lanes <= baseOffsetsLength; ii += lanes) {
@@ -679,9 +681,10 @@ HWY_INLINE float AssembleAndSumImpl(
         const auto offsetVec = hn::PromoteTo(int32Tag,
                                    hn::PromoteTo(uint16Tag,
                                        hn::LoadU(uint8Tag, baseOffsets + ii)));
-        sumVec   = hn::Add(sumVec, hn::GatherIndex(floatTag, data,
-                               hn::Add(hn::Mul(indexVec, dataBaseVec), offsetVec)));
-        indexVec = hn::Add(indexVec, laneIncrement);
+        const auto base = hn::Set(int32Tag,
+                                  static_cast<int32_t>(ii * static_cast<size_t>(dataBase)));
+        sumVec = hn::Add(sumVec, hn::GatherIndex(floatTag, data,
+                             hn::Add(hn::Add(base, scaleVec), offsetVec)));
     }
 
     float res = hn::ReduceSum(floatTag, sumVec);
@@ -736,9 +739,13 @@ HWY_INLINE float AssembleAndSumPQImpl(
 
     const auto vk         = hn::Set(d_i, k);
     const auto vBlockSize = hn::Set(d_i, blockSize);
-    const auto laneInc    = hn::Set(d_i, static_cast<int32_t>(lanes));
-    auto laneIdx = hn::Iota(d_i, 0);
     auto sumVec  = hn::Zero(d_f);
+
+    // Precompute laneIdxScaled = [0, bs, 2*bs, ..., (lanes-1)*bs] and advance
+    // it by a fixed increment each iteration.  Replaces Mul(laneIdx, vBlockSize)
+    // (VPMULLD, 3-cycle latency on critical path) with VPADDD (1-cycle latency).
+    auto laneIdxScaled = hn::Mul(hn::Iota(d_i, 0), vBlockSize);
+    const auto laneScaledInc = hn::Set(d_i, static_cast<int32_t>(lanes) * blockSize);
 
     size_t ii = 0;
     for (; ii + lanes <= subspaceCount; ii += lanes) {
@@ -750,11 +757,11 @@ HWY_INLINE float AssembleAndSumPQImpl(
         // triangular = r*(r-1)/2; always even & non-negative so ShiftRight<1> is exact.
         const auto triangular = hn::ShiftRight<1>(hn::Mul(r, hn::Sub(r, hn::Set(d_i, 1))));
         const auto offsetRow  = hn::Sub(hn::Mul(r, vk), triangular);
-        // gatherIndex = laneIdx*blockSize + offsetRow + (c - r)
-        const auto gatherIdx = hn::Add(hn::Mul(laneIdx, vBlockSize),
+        // gatherIndex = laneIdxScaled + offsetRow + (c - r)
+        const auto gatherIdx = hn::Add(laneIdxScaled,
                                        hn::Add(offsetRow, hn::Sub(c, r)));
-        sumVec  = hn::Add(sumVec, hn::GatherIndex(d_f, data, gatherIdx));
-        laneIdx = hn::Add(laneIdx, laneInc);
+        sumVec       = hn::Add(sumVec, hn::GatherIndex(d_f, data, gatherIdx));
+        laneIdxScaled = hn::Add(laneIdxScaled, laneScaledInc);
     }
 
     float res = hn::ReduceSum(d_f, sumVec);
@@ -831,27 +838,27 @@ pq_decoded_cosine_similarity_f32(const unsigned char *baseOffsets,
 
     auto sumVec = hn::Zero(floatTag);
     auto magnitudeVec = hn::Zero(floatTag);
-    const auto clusterCountVec = hn::Set(int32Tag, clusterCount);
-    const auto laneIncrement = hn::Set(int32Tag, static_cast<int32_t>(kLanes));
-    auto indexVec = hn::Iota(int32Tag, 0);
+
+    // Precompute scaleVec = [0, cc, 2*cc, ..., (kLanes-1)*cc] once.
+    // Eliminates a 512-bit VPMULLD on every iteration; the per-iteration scalar
+    // base (ii*clusterCount) is strength-reduced to an add by the compiler.
+    const auto scaleVec = hn::Mul(hn::Iota(int32Tag, 0),
+                                  hn::Set(int32Tag, clusterCount));
 
     size_t ii = 0;
     for (; ii + kLanes <= baseOffsetsLength; ii += kLanes) {
         // Load kLanes bytes and zero-extend to int32 via two PromoteTo steps (u8→u16→i32)
-        const auto u8Vec = hn::LoadU(uint8Tag, baseOffsets + ii);
-        const auto u16Vec = hn::PromoteTo(uint16Tag, u8Vec);
+        const auto u8Vec     = hn::LoadU(uint8Tag, baseOffsets + ii);
+        const auto u16Vec    = hn::PromoteTo(uint16Tag, u8Vec);
         const auto offsetVec = hn::PromoteTo(int32Tag, u16Vec);
 
         // gatherIndices[k] = (ii + k) * clusterCount + baseOffsets[ii + k]
-        const auto gatherIndices
-                = hn::Add(hn::Mul(indexVec, clusterCountVec), offsetVec);
+        const auto base = hn::Set(int32Tag,
+                                  static_cast<int32_t>(ii * static_cast<size_t>(clusterCount)));
+        const auto gatherIndices = hn::Add(hn::Add(base, scaleVec), offsetVec);
 
-        sumVec = hn::Add(sumVec,
-                         hn::GatherIndex(floatTag, partialSums, gatherIndices));
-        magnitudeVec
-                = hn::Add(magnitudeVec,
-                          hn::GatherIndex(floatTag, aMagnitude, gatherIndices));
-        indexVec = hn::Add(indexVec, laneIncrement);
+        sumVec       = hn::Add(sumVec,       hn::GatherIndex(floatTag, partialSums, gatherIndices));
+        magnitudeVec = hn::Add(magnitudeVec, hn::GatherIndex(floatTag, aMagnitude,  gatherIndices));
     }
 
     float sumResult = hn::ReduceSum(floatTag, sumVec);

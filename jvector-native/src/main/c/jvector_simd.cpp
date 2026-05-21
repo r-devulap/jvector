@@ -84,6 +84,8 @@ struct KernelVTable {
                                       float, float, float, float,
                                       const float *);
     void    (*nvq_shuffle_query_in_place_8bit)(float *, size_t);
+    /* Closest centroid search */
+    int32_t (*find_closest_centroid_f32)(const float *, int, const float *, int, int);
 };
 
 // One pre-filled vtable per ISA.  These are constant data; no heap allocation.
@@ -111,6 +113,7 @@ struct KernelVTable {
         ISA::nvq_dot_product_8bit,                                       \
         ISA::nvq_cosine_8bit_packed,                                     \
         ISA::nvq_shuffle_query_in_place_8bit,                            \
+        ISA::find_closest_centroid_f32,                                  \
     }
 
 DEFINE_ISA_VTABLE(AVX3);
@@ -342,4 +345,13 @@ int64_t nvq_cosine_8bit_packed(const float *vector,
 void nvq_shuffle_query_in_place_8bit(float *vector, size_t length)
 {
     kernels.nvq_shuffle_query_in_place_8bit(vector, length);
+}
+
+int32_t find_closest_centroid_f32(const float *subvector, int subvectorOffset,
+                                   const float *codebook, int subvectorSize,
+                                   int clusterCount)
+{
+    return kernels.find_closest_centroid_f32(subvector, subvectorOffset,
+                                             codebook, subvectorSize,
+                                             clusterCount);
 }

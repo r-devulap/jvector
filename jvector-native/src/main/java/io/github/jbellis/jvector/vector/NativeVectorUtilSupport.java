@@ -275,4 +275,13 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
         float bMag = Float.intBitsToFloat((int)(packed >>> 32));
         return new float[]{sum, bMag};
     }
+
+    @Override
+    public int findClosestCentroid(VectorFloat<?> subvector, int subvectorOffset,
+                                   VectorFloat<?> codebook, int subvectorSize, int clusterCount) {
+        return NativeSimdOps.find_closest_centroid_f32(
+                ((MemorySegmentVectorFloat) subvector).get(), subvectorOffset,
+                ((MemorySegmentVectorFloat) codebook).get(), subvectorSize,
+                clusterCount);
+    }
 }

@@ -2505,6 +2505,68 @@ public class NativeSimdOps {
            throw new AssertionError("should not reach here", ex$);
         }
     }
+
+    private static class find_closest_centroid_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            NativeSimdOps.C_INT,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_INT,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_INT,
+            NativeSimdOps.C_INT
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("find_closest_centroid_f32");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * int32_t find_closest_centroid_f32(const float *subvector, int subvectorOffset, const float *codebook, int subvectorSize, int clusterCount)
+     * }
+     */
+    public static FunctionDescriptor find_closest_centroid_f32$descriptor() {
+        return find_closest_centroid_f32.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * int32_t find_closest_centroid_f32(const float *subvector, int subvectorOffset, const float *codebook, int subvectorSize, int clusterCount)
+     * }
+     */
+    public static MethodHandle find_closest_centroid_f32$handle() {
+        return find_closest_centroid_f32.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * int32_t find_closest_centroid_f32(const float *subvector, int subvectorOffset, const float *codebook, int subvectorSize, int clusterCount)
+     * }
+     */
+    public static MemorySegment find_closest_centroid_f32$address() {
+        return find_closest_centroid_f32.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * int32_t find_closest_centroid_f32(const float *subvector, int subvectorOffset, const float *codebook, int subvectorSize, int clusterCount)
+     * }
+     */
+    public static int find_closest_centroid_f32(MemorySegment subvector, int subvectorOffset, MemorySegment codebook, int subvectorSize, int clusterCount) {
+        var mh$ = find_closest_centroid_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("find_closest_centroid_f32", subvector, subvectorOffset, codebook, subvectorSize, clusterCount);
+            }
+            return (int)mh$.invokeExact(subvector, subvectorOffset, codebook, subvectorSize, clusterCount);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
     private static final MemorySegment NULL = MemorySegment.ofAddress(0L);
     /**
      * {@snippet lang=c :

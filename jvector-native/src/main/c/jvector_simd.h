@@ -58,6 +58,8 @@ JVECTOR_SIMD_API void    sub_in_place_f32(float* v1, const float* v2, size_t len
 JVECTOR_SIMD_API void    sub_scalar_in_place_f32(float* v1, float value, size_t length);
 JVECTOR_SIMD_API float   max_f32(const float* v, size_t length);
 JVECTOR_SIMD_API void    min_in_place_f32(float* v1, const float* v2, size_t length);
+/* Closest centroid search */
+JVECTOR_SIMD_API int32_t find_closest_centroid_f32(const float* subvector, int subvectorOffset, const float* codebook, int subvectorSize, int clusterCount);
 #ifdef __cplusplus
 }
 #endif // extern "C"

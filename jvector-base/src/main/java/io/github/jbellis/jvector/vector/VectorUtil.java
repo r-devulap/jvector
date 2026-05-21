@@ -100,6 +100,18 @@ public final class VectorUtil {
   }
 
   /**
+   * Returns the index of the centroid in {@code codebook} whose subvector (of length
+   * {@code subvectorSize}) is closest in squared L2 distance to
+   * {@code subvector[subvectorOffset..subvectorOffset+subvectorSize)}.
+   * Each of the {@code clusterCount} centroids occupies a contiguous slice of length
+   * {@code subvectorSize} in {@code codebook}.
+   */
+  public static int findClosestCentroid(VectorFloat<?> subvector, int subvectorOffset,
+                                         VectorFloat<?> codebook, int subvectorSize, int clusterCount) {
+    return impl.findClosestCentroid(subvector, subvectorOffset, codebook, subvectorSize, clusterCount);
+  }
+
+  /**
    * Modifies the argument to be unit length, dividing by its l2-norm. IllegalArgumentException is
    * thrown for zero vectors.
    *

@@ -355,6 +355,35 @@ HWY_FLATTEN float euclidean_f32(
     return L2SquareDistance(a, aoffset, b, boffset, length);
 }
 
+// Returns the index of the centroid in `codebook` whose subvector (of length
+// `subvectorSize`) is closest in L2 to `subvector[subvectorOffset..]`.
+// Each of the `clusterCount` centroids occupies a contiguous slice of
+// `codebook` of length `subvectorSize`.
+// The inner L2 computation uses the same SIMD-vectorized L2SquareDistanceImpl
+// as euclidean_f32, so each distance evaluation is fully vectorized.
+// The primary benefit over calling euclidean_f32 from Java is eliminating
+// per-call FFM dispatch overhead for all clusterCount iterations.
+HWY_FLATTEN int32_t find_closest_centroid_f32(
+        const float *HWY_RESTRICT subvector,
+        int subvectorOffset,
+        const float *HWY_RESTRICT codebook,
+        int subvectorSize,
+        int clusterCount)
+{
+    const float *sv = subvector + subvectorOffset;
+    const size_t sz = static_cast<size_t>(subvectorSize);
+    float minDist = FLT_MAX;
+    int32_t minIdx = 0;
+    for (int i = 0; i < clusterCount; i++) {
+        float dist = L2SquareDistance(codebook, static_cast<size_t>(i) * sz, sv, 0, sz);
+        if (dist < minDist) {
+            minDist = dist;
+            minIdx = i;
+        }
+    }
+    return minIdx;
+}
+
 // =============================================================================
 // Element-wise in-place arithmetic and reduction kernels
 // =============================================================================

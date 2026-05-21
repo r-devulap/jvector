@@ -242,4 +242,28 @@ public interface VectorUtilSupport {
    */
   float nvqUniformLoss(VectorFloat<?> vector, float minValue, float maxValue, int nBits);
 
+  /**
+   * Returns the index of the centroid in {@code codebook} whose subvector is closest (in squared
+   * L2 distance) to {@code subvector[subvectorOffset..subvectorOffset+subvectorSize)}.
+   * Each of the {@code clusterCount} centroids occupies a contiguous slice of length
+   * {@code subvectorSize} in {@code codebook}.
+   * <p>
+   * The default implementation calls {@link #squareDistance} per centroid, which is already
+   * SIMD-vectorized by the Panama / native path. Subclasses that can batch the loop in a single
+   * native call should override this method.
+   */
+  default int findClosestCentroid(VectorFloat<?> subvector, int subvectorOffset,
+                                   VectorFloat<?> codebook, int subvectorSize, int clusterCount) {
+    float minDist = Float.MAX_VALUE;
+    int index = 0;
+    for (int i = 0; i < clusterCount; i++) {
+      float dist = squareDistance(subvector, subvectorOffset, codebook, i * subvectorSize, subvectorSize);
+      if (dist < minDist) {
+        minDist = dist;
+        index = i;
+      }
+    }
+    return index;
+  }
+
 }

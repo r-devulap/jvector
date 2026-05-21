@@ -113,6 +113,12 @@
                                    const float *centroid); \
     void nvq_shuffle_query_in_place_8bit(float *vector, \
                                          size_t length); \
+    /* Closest centroid search */ \
+    int32_t find_closest_centroid_f32(const float *subvector, \
+                                      int subvectorOffset, \
+                                      const float *codebook, \
+                                      int subvectorSize, \
+                                      int clusterCount); \
     }
 
 DECLARE_SIMD_KERNELS(AVX3)

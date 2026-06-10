@@ -16,16 +16,12 @@
 
 package io.github.jbellis.jvector.vector;
 
-import java.nio.ByteOrder;
+import java.lang.foreign.MemorySegment;
 
 import io.github.jbellis.jvector.annotations.Experimental;
 import io.github.jbellis.jvector.vector.cnative.NativeSimdOps;
 import io.github.jbellis.jvector.vector.types.ByteSequence;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
-import jdk.incubator.vector.ByteVector;
-import jdk.incubator.vector.FloatVector;
-import jdk.incubator.vector.VectorMask;
-import jdk.incubator.vector.VectorSpecies;
 
 /**
  * Experimental!
@@ -37,46 +33,15 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     public NativeVectorUtilSupport() {}
 
     @Override
-    protected FloatVector fromVectorFloat(VectorSpecies<Float> SPEC, VectorFloat<?> vector, int offset) {
-        return FloatVector.fromMemorySegment(SPEC, ((MemorySegmentVectorFloat) vector).get(), vector.offset(offset), ByteOrder.LITTLE_ENDIAN);
-    }
-
-    @Override
-    protected FloatVector fromVectorFloat(VectorSpecies<Float> SPEC, VectorFloat<?> vector, int offset, int[] indices, int indicesOffset) {
-        throw new UnsupportedOperationException("Assembly not supported with memory segments.");
-    }
-
-    @Override
-    protected void intoVectorFloat(FloatVector vector, VectorFloat<?> v, int offset) {
-        vector.intoMemorySegment(((MemorySegmentVectorFloat) v).get(), v.offset(offset), ByteOrder.LITTLE_ENDIAN);
-    }
-
-    @Override
-    protected ByteVector fromByteSequence(VectorSpecies<Byte> SPEC, ByteSequence<?> vector, int offset) {
-        return ByteVector.fromMemorySegment(SPEC, ((MemorySegmentByteSequence) vector).get(), offset, ByteOrder.LITTLE_ENDIAN);
-    }
-
-    @Override
-    protected void intoByteSequence(ByteVector vector, ByteSequence<?> v, int offset) {
-        vector.intoMemorySegment(((MemorySegmentByteSequence) v).get(), offset, ByteOrder.LITTLE_ENDIAN);
-    }
-
-    @Override
-    protected void intoByteSequence(ByteVector vector, ByteSequence<?> v, int offset, VectorMask<Byte> mask) {
-        vector.intoMemorySegment(((MemorySegmentByteSequence) v).get(), offset, ByteOrder.LITTLE_ENDIAN, mask);
-    }
-
-    @Override
     public float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets) {
         return assembleAndSum(data, dataBase, baseOffsets, 0, baseOffsets.length());
     }
 
     @Override
-    public float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength)
-    {
-        assert baseOffsets.offset() == 0 : "Base offsets are expected to have an offset of 0. Found: " + baseOffsets.offset();
-        // baseOffsets is a pointer into a PQ chunk - we need to index into it by baseOffsetsOffset and provide baseOffsetsLength to the native code
-        return NativeSimdOps.assemble_and_sum_f32_512(((MemorySegmentVectorFloat) data).get(), dataBase, ((MemorySegmentByteSequence) baseOffsets).get(), baseOffsetsOffset, baseOffsetsLength);
+    public float assembleAndSum(VectorFloat<?> data, int dataBase, ByteSequence<?> baseOffsets, int baseOffsetsOffset, int baseOffsetsLength) {
+        return NativeSimdOps.assemble_and_sum_f32_512(
+                MemorySegment.ofArray(((ArrayVectorFloat) data).get()), dataBase,
+                MemorySegment.ofArray(((ArrayByteSequence) baseOffsets).get()), baseOffsetsOffset, baseOffsetsLength);
     }
 
     @Override
@@ -100,8 +65,11 @@ final class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public float pqDecodedCosineSimilarity(ByteSequence<?> encoded, int encodedOffset, int encodedLength, int clusterCount, VectorFloat<?> partialSums, VectorFloat<?> aMagnitude, float bMagnitude) {
-        assert encoded.offset() == 0 : "Bulk shuffle shuffles are expected to have an offset of 0. Found: " + encoded.offset();
-        // encoded is a pointer into a PQ chunk - we need to index into it by encodedOffset and provide encodedLength to the native code
-        return NativeSimdOps.pq_decoded_cosine_similarity_f32_512(((MemorySegmentByteSequence) encoded).get(), encodedOffset, encodedLength, clusterCount, ((MemorySegmentVectorFloat) partialSums).get(), ((MemorySegmentVectorFloat) aMagnitude).get(), bMagnitude);
+        return NativeSimdOps.pq_decoded_cosine_similarity_f32_512(
+                MemorySegment.ofArray(((ArrayByteSequence) encoded).get()), encodedOffset, encodedLength,
+                clusterCount,
+                MemorySegment.ofArray(((ArrayVectorFloat) partialSums).get()),
+                MemorySegment.ofArray(((ArrayVectorFloat) aMagnitude).get()),
+                bMagnitude);
     }
 }

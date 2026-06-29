@@ -175,6 +175,53 @@
 
 namespace hn = hwy::HWY_NAMESPACE;
 
+// =============================================================================
+// FP16 dot-product helper — fallback for AVX3 / AVX2 / SSE42
+// =============================================================================
+//
+// No native FP16 arithmetic: load uint16_t raw bits into a half-width register,
+// BitCast to float16_t, PromoteTo float, then accumulate using float MulAdd.
+// The half-tag gives exactly Lanes(float_tag)/2 float16 lanes per load, which
+// promotes into one full float vector.
+HWY_INLINE float DotProductF16(const uint16_t *a,
+                                size_t aoffset,
+                                const uint16_t *b,
+                                size_t boffset,
+                                size_t length)
+{
+    a += aoffset;
+    b += boffset;
+
+    using F32Tag = hn::ScalableTag<float>;
+    using F16Tag = hn::Rebind<hwy::float16_t, F32Tag>;
+    using U16Tag = hn::Rebind<uint16_t, F32Tag>;
+    const F32Tag df32;
+    const F16Tag df16;
+    const U16Tag du16;
+    // Half as many float16 lanes fit per full float register (== f32_lanes/2 on x86).
+    const size_t f16_lanes = hn::Lanes(df16);
+
+    auto acc = hn::Zero(df32);
+    size_t ii = 0;
+    for (; ii + f16_lanes <= length; ii += f16_lanes) {
+        // Load f16_lanes uint16 raw bits, BitCast to float16_t, promote to float.
+        const auto ra = hn::LoadU(du16, a + ii);
+        const auto rb = hn::LoadU(du16, b + ii);
+        const auto fa = hn::PromoteTo(df32, hn::BitCast(df16, ra));
+        const auto fb = hn::PromoteTo(df32, hn::BitCast(df16, rb));
+        acc = hn::MulAdd(fa, fb, acc);
+    }
+    if (ii < length) {
+        const size_t rem = length - ii;
+        const auto ra = hn::LoadN(du16, a + ii, rem);
+        const auto rb = hn::LoadN(du16, b + ii, rem);
+        const auto fa = hn::PromoteTo(df32, hn::BitCast(df16, ra));
+        const auto fb = hn::PromoteTo(df32, hn::BitCast(df16, rb));
+        acc = hn::MulAdd(fa, fb, acc);
+    }
+    return hn::ReduceSum(df32, acc);
+}
+
 // Loads 8 floats from ptr and broadcasts them to fill the full vector D.
 // On ISAs where D is exactly 8 lanes (e.g. AVX2) this is a plain LoadU.
 // On wider ISAs (e.g. AVX-512, 16 lanes) the 8 floats are loaded into the
@@ -357,6 +404,15 @@ HWY_FLATTEN float euclidean_f32(
         const float *a, size_t aoffset, const float *b, size_t boffset, size_t length)
 {
     return L2SquareDistance(a, aoffset, b, boffset, length);
+}
+
+// Fallback FP16 dot-product for AVX3 / AVX2 / SSE42: promotes through float.
+// On AVX3_SPR this symbol is not used; the vtable overrides it with the native
+// AVX-512 FP16 implementation from jvector_avx3_spr_kernels.cpp.
+HWY_FLATTEN float dot_product_f16(
+        const uint16_t *a, size_t aoffset, const uint16_t *b, size_t boffset, size_t length)
+{
+    return DotProductF16(a, aoffset, b, boffset, length);
 }
 
 // =============================================================================

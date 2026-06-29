@@ -19,7 +19,7 @@
 // The macro will auto-generate:
 //   - Namespace declarations in jvector_simd_kernels.h
 //   - KernelVTable struct members
-//   - Vtable initializers for AVX3, AVX2, SSE42
+//   - Vtable initializers for AVX3_SPR, AVX3, AVX2, SSE42
 //   - Public API wrapper functions
 //   - Public C API declarations in jvector_simd.h
 //
@@ -37,6 +37,7 @@
     KERNEL_ENTRY(float, cosine_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
     KERNEL_ENTRY(float, dot_product_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
     KERNEL_ENTRY(float, euclidean_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
+    KERNEL_ENTRY(float, dot_product_f16, (const uint16_t *a, size_t aoffset, const uint16_t *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
     /* Element-wise in-place arithmetic */ \
     KERNEL_ENTRY(void, add_in_place_f32, (float *v1, const float *v2, size_t length), (v1, v2, length)) \
     KERNEL_ENTRY(void, add_scalar_in_place_f32, (float *v1, float value, size_t length), (v1, value, length)) \

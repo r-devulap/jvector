@@ -19,7 +19,7 @@
 // AVX2 and AVX3 are probed via CPUID.  Function pointers are resolved once at
 // static-init time; each public call is a single indirect branch.
 #include "jvector_simd.h"
-#include "jvector_simd_kernels.h" // AVX3::, AVX2::, SSE42:: kernel declarations
+#include "jvector_simd_kernels.h" // AVX3_SPR::, AVX3::, AVX2::, SSE42:: kernel declarations
 #include "jvector_cpu_features.h"  // populate_cpu_features(), CpuFeature enum
 
 #include <array>
@@ -33,16 +33,17 @@ namespace {
 // Enumerates the ISA tiers in ascending capability order so that numeric
 // comparisons (e.g. max_isa != MaxIsa::AVX2) correctly gate higher tiers.
 // Unset (-1) means "no override; use best available CPU capability".
-enum class MaxIsa { Unset = -1, SSE42 = 0, AVX2 = 1, AVX3 = 2 };
+enum class MaxIsa { Unset = -1, SSE42 = 0, AVX2 = 1, AVX3 = 2, AVX3_SPR = 3 };
 
 // Reads the JVECTOR_MAX_ISA environment variable and maps it to a MaxIsa
 // value.  This lets callers cap the ISA at runtime without recompiling —
 // useful for benchmarking or working around CPU errata.
-// Accepted values (case-sensitive): "avx3", "avx2", "sse42".
+// Accepted values (case-sensitive): "avx3_spr", "avx3", "avx2", "sse42".
 static MaxIsa read_max_isa() noexcept
 {
     const char *val = std::getenv("JVECTOR_MAX_ISA");
     if (!val) return MaxIsa::Unset;
+    if (std::strcmp(val, "avx3_spr") == 0) return MaxIsa::AVX3_SPR;
     if (std::strcmp(val, "avx3")  == 0) return MaxIsa::AVX3;
     if (std::strcmp(val, "avx2")  == 0) return MaxIsa::AVX2;
     if (std::strcmp(val, "sse42") == 0) return MaxIsa::SSE42;
@@ -68,6 +69,14 @@ static const KernelVTable AVX3_vtable = {
     JVECTOR_SIMD_KERNEL_LIST
 };
 #undef KERNEL_ENTRY
+
+// AVX3_SPR inherits all slots from AVX3 and overrides only dot_product_f16
+// with the native AVX-512 FP16 implementation from jvector_avx3_spr_kernels.cpp.
+static const KernelVTable AVX3_SPR_vtable = []() {
+    KernelVTable t = AVX3_vtable;
+    t.dot_product_f16 = AVX3_SPR::dot_product_f16;
+    return t;
+}();
 
 #define KERNEL_ENTRY(ret_type, name, params, names) AVX2::name,
 static const KernelVTable AVX2_vtable = {
@@ -96,6 +105,16 @@ static KernelVTable dispatch_kernels() noexcept
         return features[static_cast<uint32_t>(f)];
     };
 
+    // AVX3_SPR tier requires AVX3 baseline plus AVX512_FP16 and AVX512_BF16
+    // (Intel Sapphire Rapids / Granite Rapids / Meteor Lake+).
+    if (max_isa != MaxIsa::SSE42 && max_isa != MaxIsa::AVX2
+        && max_isa != MaxIsa::AVX3
+        && has(CpuFeature::AVX512F) && has(CpuFeature::AVX512BW)
+        && has(CpuFeature::AVX512CD) && has(CpuFeature::AVX512DQ)
+        && has(CpuFeature::AVX512VL)
+        && has(CpuFeature::AVX512_FP16) && has(CpuFeature::AVX512_BF16)) {
+        return AVX3_SPR_vtable;
+    }
     // AVX3 tier requires the full Skylake-AVX512 (SKX) baseline:
     // AVX512F (foundation) + BW (byte/word) + CD (conflict detect)
     // + DQ (dword/qword) + VL (vector length extensions).

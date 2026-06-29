@@ -23,7 +23,19 @@ project('jvector_simd_kernels', 'cpp',
 # dynamic-dispatch runtime, so only headers are needed at compile time.
 hwy_inc = include_directories('third_party/highway')
 
-# Each ISA variant: name, JV_ISA namespace, and extra compiler flags
+# AVX3_SPR is built separately: only jvector_AVX3_SPR_kernels.cpp needs
+# -march=sapphirerapids.  All other kernels reuse the AVX3 object.
+spr_lib = static_library(
+  'simdKernels_avx3_spr',
+  sources            : 'jvector_avx3_spr_kernels.cpp',
+  include_directories: hwy_inc,
+  cpp_args           : ['-march=sapphirerapids',
+                        '-DHWY_COMPILE_ONLY_STATIC',
+                        '-DJV_REQUIRE_HWY_AVX3_SPR',
+                        '-fvisibility=hidden'],
+)
+
+# AVX3 / AVX2 / SSE42 variants: all compiled from the shared kernels file.
 isa_variants = [
   {
     'name'     : 'avx3',
@@ -35,7 +47,7 @@ isa_variants = [
   {
     'name'     : 'avx2',
     'namespace': 'AVX2',
-    'args'     : ['-march=haswell', 
+    'args'     : ['-march=haswell',
                   '-maes',
                   '-DHWY_COMPILE_ONLY_STATIC',
                   '-DJV_REQUIRE_HWY_AVX2'],
@@ -49,7 +61,7 @@ isa_variants = [
   },
 ]
 
-isa_libs = []
+isa_libs = [spr_lib]
 foreach isa : isa_variants
   lib = static_library(
     'simdKernels_' + isa['name'],

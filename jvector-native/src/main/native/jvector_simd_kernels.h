@@ -22,6 +22,30 @@
 #include <cstddef>
 #include <cstdint>
 
+// ---------------------------------------------------------------------------
+// Portable optimisation hints
+//
+// JV_OPTIMIZE(opts)
+//   GCC/Clang: __attribute__((optimize(opts))) — request extra optimisation
+//   passes on a single function (e.g. "rename-registers").
+//   MSVC: no equivalent; expands to nothing.
+//
+// JV_PRAGMA_UNROLL(N)
+//   GCC/Clang: emits "#pragma GCC unroll N" via _Pragma, hinting the compiler
+//   to unroll the immediately following loop N times.
+//   MSVC: no equivalent; expands to nothing.
+//   Usage: place on its own line directly before the for/while statement.
+// ---------------------------------------------------------------------------
+#if defined(_MSC_VER)
+#  define JV_OPTIMIZE(opts)
+#  define JV_PRAGMA_UNROLL(N)
+#else
+#  define JV_OPTIMIZE(opts)       __attribute__((optimize(opts)))
+#  define JV_PRAGMA_UNROLL(N)     _Pragma(JV_STRINGIFY_(GCC unroll N))
+#  define JV_STRINGIFY_(x)        JV_STRINGIFY2_(x)
+#  define JV_STRINGIFY2_(x)       #x
+#endif
+
 // Macro to declare a kernel function signature from the kernel list
 #define KERNEL_ENTRY(ret_type, name, params, names) \
     ret_type name params;

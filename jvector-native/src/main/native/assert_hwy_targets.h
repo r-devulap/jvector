@@ -15,21 +15,36 @@
  */
 
 #if defined(__x86_64__) || defined(_M_X64)
+// AVX3_DL and AVX3_SPR tiers cannot use their own fine-grained march under
+// MSVC (no icelake-server / sapphirerapids target).  Both are compiled with
+// /arch:AVX512, so Highway selects HWY_AVX3 — assert that here instead.
 #if defined(JV_REQUIRE_HWY_AVX3_SPR)
-#if HWY_STATIC_TARGET != HWY_AVX3_SPR
-#error "Highway did not select HWY_AVX3_SPR for the Sapphire Rapids build. Check compiler flags, compiler support, and Highway blocklists."
-#endif
+#  ifdef _MSC_VER
+#    if HWY_STATIC_TARGET != HWY_AVX3
+#      error "MSVC AVX3_SPR build: expected Highway to select HWY_AVX3 (/arch:AVX512). Check compiler flags."
+#    endif
+#  else
+#    if HWY_STATIC_TARGET != HWY_AVX3_SPR
+#      error "Highway did not select HWY_AVX3_SPR for the Sapphire Rapids build. Check compiler flags, compiler support, and Highway blocklists."
+#    endif
+#  endif
 #elif defined(JV_REQUIRE_HWY_AVX3_DL)
-#if HWY_STATIC_TARGET != HWY_AVX3_DL
-#error "Highway did not select HWY_AVX3_DL for the Ice Lake build. Check compiler flags, compiler support, and Highway blocklists."
-#endif
+#  ifdef _MSC_VER
+#    if HWY_STATIC_TARGET != HWY_AVX3
+#      error "MSVC AVX3_DL build: expected Highway to select HWY_AVX3 (/arch:AVX512). Check compiler flags."
+#    endif
+#  else
+#    if HWY_STATIC_TARGET != HWY_AVX3_DL
+#      error "Highway did not select HWY_AVX3_DL for the Ice Lake build. Check compiler flags, compiler support, and Highway blocklists."
+#    endif
+#  endif
 #elif defined(JV_REQUIRE_HWY_AVX3)
-#if HWY_STATIC_TARGET != HWY_AVX3
-#error "Highway did not select HWY_AVX3 for the AVX-512 build. Check compiler flags, compiler support, and Highway blocklists."
-#endif
+#  if HWY_STATIC_TARGET != HWY_AVX3
+#    error "Highway did not select HWY_AVX3 for the AVX-512 build. Check compiler flags, compiler support, and Highway blocklists."
+#  endif
 #elif defined(JV_REQUIRE_HWY_AVX2)
-#if HWY_STATIC_TARGET != HWY_AVX2
-#error "Highway did not select HWY_AVX2 for the AVX2 build. Check compiler flags, compiler support, and Highway blocklists."
+#  if HWY_STATIC_TARGET != HWY_AVX2
+#    error "Highway did not select HWY_AVX2 for the AVX2 build. Check compiler flags, compiler support, and Highway blocklists."
+#  endif
 #endif
-#endif //
 #endif // __X86_64__

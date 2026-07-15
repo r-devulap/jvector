@@ -19,6 +19,7 @@
 #include <math.h>
 #include <cstring>
 #include "jvector_simd.h"
+#include "jvector_simd_kernels.h"
 #include "hwy/highway.h"
 #include "assert_hwy_targets.h"
 
@@ -368,7 +369,7 @@ HWY_FLATTEN float euclidean_f32(
 // #pragma GCC unroll 4: unroll by 4 to hide the 4-cycle FMA latency and keep
 //   both AVX-512 FMA ports saturated across independent load–op–store chains.
 //
-__attribute__((optimize("rename-registers")))
+JV_OPTIMIZE("rename-registers")
 HWY_FLATTEN void add_in_place_f32(float *HWY_RESTRICT v1,
                                    const float *HWY_RESTRICT v2,
                                    size_t length)
@@ -376,7 +377,7 @@ HWY_FLATTEN void add_in_place_f32(float *HWY_RESTRICT v1,
     hn::ScalableTag<float> d;
     const size_t lanes = hn::Lanes(d);
     size_t i = 0;
-#pragma GCC unroll 4
+JV_PRAGMA_UNROLL(4)
     for (; i + lanes <= length; i += lanes) {
         auto a = hn::LoadU(d, v1 + i);
         auto b = hn::LoadU(d, v2 + i);
@@ -390,7 +391,7 @@ HWY_FLATTEN void add_in_place_f32(float *HWY_RESTRICT v1,
     }
 }
 
-__attribute__((optimize("rename-registers")))
+JV_OPTIMIZE("rename-registers")
 HWY_FLATTEN void add_scalar_in_place_f32(float *HWY_RESTRICT v1,
                                           float value,
                                           size_t length)
@@ -399,7 +400,7 @@ HWY_FLATTEN void add_scalar_in_place_f32(float *HWY_RESTRICT v1,
     const size_t lanes = hn::Lanes(d);
     const auto vval = hn::Set(d, value);
     size_t i = 0;
-#pragma GCC unroll 4
+JV_PRAGMA_UNROLL(4)
     for (; i + lanes <= length; i += lanes) {
         auto a = hn::LoadU(d, v1 + i);
         hn::StoreU(hn::Add(a, vval), d, v1 + i);
@@ -411,7 +412,7 @@ HWY_FLATTEN void add_scalar_in_place_f32(float *HWY_RESTRICT v1,
     }
 }
 
-__attribute__((optimize("rename-registers")))
+JV_OPTIMIZE("rename-registers")
 HWY_FLATTEN void sub_in_place_f32(float *HWY_RESTRICT v1,
                                    const float *HWY_RESTRICT v2,
                                    size_t length)
@@ -419,7 +420,7 @@ HWY_FLATTEN void sub_in_place_f32(float *HWY_RESTRICT v1,
     hn::ScalableTag<float> d;
     const size_t lanes = hn::Lanes(d);
     size_t i = 0;
-#pragma GCC unroll 4
+JV_PRAGMA_UNROLL(4)
     for (; i + lanes <= length; i += lanes) {
         auto a = hn::LoadU(d, v1 + i);
         auto b = hn::LoadU(d, v2 + i);
@@ -433,7 +434,7 @@ HWY_FLATTEN void sub_in_place_f32(float *HWY_RESTRICT v1,
     }
 }
 
-__attribute__((optimize("rename-registers")))
+JV_OPTIMIZE("rename-registers")
 HWY_FLATTEN void sub_scalar_in_place_f32(float *HWY_RESTRICT v1,
                                           float value,
                                           size_t length)
@@ -442,7 +443,7 @@ HWY_FLATTEN void sub_scalar_in_place_f32(float *HWY_RESTRICT v1,
     const size_t lanes = hn::Lanes(d);
     const auto vval = hn::Set(d, value);
     size_t i = 0;
-#pragma GCC unroll 4
+JV_PRAGMA_UNROLL(4)
     for (; i + lanes <= length; i += lanes) {
         auto a = hn::LoadU(d, v1 + i);
         hn::StoreU(hn::Sub(a, vval), d, v1 + i);
@@ -454,14 +455,14 @@ HWY_FLATTEN void sub_scalar_in_place_f32(float *HWY_RESTRICT v1,
     }
 }
 
-__attribute__((optimize("rename-registers")))
+JV_OPTIMIZE("rename-registers")
 HWY_FLATTEN float max_f32(const float *HWY_RESTRICT v, size_t length)
 {
     hn::ScalableTag<float> d;
     const size_t lanes = hn::Lanes(d);
     auto accum = hn::Set(d, -FLT_MAX);
     size_t i = 0;
-#pragma GCC unroll 4
+JV_PRAGMA_UNROLL(4)
     for (; i + lanes <= length; i += lanes) {
         accum = hn::Max(accum, hn::LoadU(d, v + i));
     }
@@ -472,7 +473,7 @@ HWY_FLATTEN float max_f32(const float *HWY_RESTRICT v, size_t length)
     return result;
 }
 
-__attribute__((optimize("rename-registers")))
+JV_OPTIMIZE("rename-registers")
 HWY_FLATTEN void min_in_place_f32(float *HWY_RESTRICT v1,
                                    const float *HWY_RESTRICT v2,
                                    size_t length)
@@ -480,7 +481,7 @@ HWY_FLATTEN void min_in_place_f32(float *HWY_RESTRICT v1,
     hn::ScalableTag<float> d;
     const size_t lanes = hn::Lanes(d);
     size_t i = 0;
-#pragma GCC unroll 4
+JV_PRAGMA_UNROLL(4)
     for (; i + lanes <= length; i += lanes) {
         auto a = hn::LoadU(d, v1 + i);
         auto b = hn::LoadU(d, v2 + i);
@@ -575,7 +576,7 @@ HWY_INLINE void calculate_partial_sums_f32(const float *HWY_RESTRICT codebook,
                 hn::Vec<FloatTag> swapped = hn::Shuffle2301(score);
                 hn::Vec<FloatTag> sum = score + swapped;
                 hn::StoreU(sum, tag, tmp);
-#pragma GCC unroll 8
+JV_PRAGMA_UNROLL(8)
                 for (int jj = 0; jj < centroids_per_iter; ++jj) {
                     partialSums[codebookBase + ii + jj] = tmp[jj * 2];
                 }
@@ -599,7 +600,7 @@ HWY_INLINE void calculate_partial_sums_f32(const float *HWY_RESTRICT codebook,
                 temp = hn::Shuffle1032(sum);
                 sum = hn::Add(sum, temp);
                 hn::StoreU(sum, tag, tmp);
-#pragma GCC unroll 4
+JV_PRAGMA_UNROLL(4)
                 for (int jj = 0; jj < centroids_per_iter; ++jj) {
                     partialSums[codebookBase + ii + jj] = tmp[jj * 4];
                 }
@@ -624,7 +625,7 @@ HWY_INLINE void calculate_partial_sums_f32(const float *HWY_RESTRICT codebook,
                 temp = hn::Shuffle2301(sum);
                 sum = hn::Add(sum, temp);
                 hn::StoreU(sum, tag, tmp);
-#pragma GCC unroll 2
+JV_PRAGMA_UNROLL(2)
                 for (int jj = 0; jj < centroids_per_iter; ++jj) {
                     partialSums[codebookBase + ii + jj] = tmp[jj * 8];
                 }
@@ -947,7 +948,7 @@ HWY_FLATTEN void calculate_partial_sums_self_magnitude_f32(
                 hn::Vec<FloatTag> swapped = hn::Shuffle2301(sum);
                 sum = hn::Add(sum, swapped);
                 hn::StoreU(sum, tag, tmp);
-#pragma GCC unroll 8
+JV_PRAGMA_UNROLL(8)
                 for (int jj = 0; jj < centroids_per_iter; ++jj) {
                     partialSums[codebookBase + ii + jj] = tmp[jj * 2];
                 }
@@ -968,7 +969,7 @@ HWY_FLATTEN void calculate_partial_sums_self_magnitude_f32(
                 temp = hn::Shuffle1032(sum);
                 sum = hn::Add(sum, temp);
                 hn::StoreU(sum, tag, tmp);
-#pragma GCC unroll 4
+JV_PRAGMA_UNROLL(4)
                 for (int jj = 0; jj < centroids_per_iter; ++jj) {
                     partialSums[codebookBase + ii + jj] = tmp[jj * 4];
                 }
@@ -991,7 +992,7 @@ HWY_FLATTEN void calculate_partial_sums_self_magnitude_f32(
                 temp = hn::Shuffle2301(sum);
                 sum = hn::Add(sum, temp);
                 hn::StoreU(sum, tag, tmp);
-#pragma GCC unroll 2
+JV_PRAGMA_UNROLL(2)
                 for (int jj = 0; jj < centroids_per_iter; ++jj) {
                     partialSums[codebookBase + ii + jj] = tmp[jj * 8];
                 }

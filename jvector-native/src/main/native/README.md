@@ -16,13 +16,13 @@ limitations under the License.
 
 # JVector Native SIMD Library
 
-This directory contains the C++ source for `libjvector.so`, the native SIMD
-backend that accelerates vector operations in JVector via the Java Foreign
-Function & Memory (FFM) API.
+This directory contains the C++ source for the native SIMD backend
+(`libjvector.so` on Linux/macOS, `jvector.dll` on Windows) that accelerates
+vector operations in JVector via the Java Foreign Function & Memory (FFM) API.
 
-> **Platform support:** Currently enabled on **Linux x86-64** (SSE4.2, AVX2,
-> and AVX-512). Windows and macOS are not yet supported. Support for **ARM**
-> (NEON and SVE) is planned for the near future; the
+> **Platform support:** Enabled on **Linux x86-64** and **Windows x86-64**
+> (SSE4.2, AVX2, and AVX-512). Support for **ARM** (NEON and SVE) is planned
+> for the near future; the
 > [Google Highway](https://github.com/google/highway) library used for SIMD
 > portability already targets both AArch64 targets, which will make the
 > extension straightforward.
@@ -40,7 +40,8 @@ jvector_simd_kernel_list.h    — X-Macro table: single source of truth for all 
 jvector_cpu_features.h        — CPUID/XGETBV-based CPU feature detection
 assert_hwy_targets.h          — Compile-time assertions that the expected HWY target is active
 meson.build                   — Build description
-jextract_vector_simd.sh       — Build + jextract script (the usual entry point)
+jextract_vector_simd.sh       — Build + jextract script for Linux/macOS
+build_windows.ps1             — Build + jextract script for Windows (PowerShell)
 third_party/highway/          — Google Highway header-only library (git submodule)
 ```
 
@@ -50,14 +51,50 @@ third_party/highway/          — Google Highway header-only library (git submod
 
 ### Prerequisites
 
+#### Linux
+
 | Tool | Minimum version | Notes |
 |------|----------------|-------|
-| g++ / clang++ | GCC 11+ | Must support `-march=skylake-avx512` |
+| g++ | GCC 11+ | Must support `-march=skylake-avx512` |
 | [Meson](https://mesonbuild.com/) | 0.55 | `pip install meson` |
 | [Ninja](https://ninja-build.org/) | any | `sudo apt install ninja-build` |
 | Git submodules | — | `git submodule update --init` (needed once) |
 
+#### Windows
+
+Two compilers are supported. MSVC is the preferred choice when Visual Studio is available.
+
+**Option A — MSVC (Visual Studio 2019 or later, recommended)**
+
+| Tool | Minimum version | Notes |
+|------|----------------|-------|
+| Visual Studio | 2019+ | C++ workload required; run from a *VS Developer Command Prompt* |
+| [Git for Windows](https://gitforwindows.org/) | any | Provides the bash shell used to run the script |
+| [Meson](https://mesonbuild.com/) | 0.55 | `pip install meson` |
+| [Ninja](https://ninja-build.org/) | any | `pip install ninja` |
+| Git submodules | — | `git submodule update --init` (needed once) |
+
+> **MSVC ISA coverage:** MSVC supports `/arch:AVX512` and `/arch:AVX2` but has
+> no fine-grained microarchitecture targets (no equivalent of
+> `-march=icelake-server` or `-march=sapphirerapids`). As a result, the
+> `AVX3_DL` (Ice Lake) and `AVX3_SPR` (Sapphire Rapids) tiers are **not
+> compiled** under MSVC. At runtime those tiers fall back to the `AVX3`
+> (Skylake-AVX512) implementation. If full ICX/SPR tier coverage matters, use
+> clang++ instead.
+
+**Option B — LLVM clang++ (full tier coverage)**
+
+| Tool | Minimum version | Notes |
+|------|----------------|-------|
+| [LLVM clang++](https://releases.llvm.org/) | 14+ | Must be on `PATH`; set `CXX=clang++` if both VS and LLVM are installed |
+| [Git for Windows](https://gitforwindows.org/) | any | Provides the bash shell used to run the script |
+| [Meson](https://mesonbuild.com/) | 0.55 | `pip install meson` |
+| [Ninja](https://ninja-build.org/) | any | `pip install ninja` |
+| Git submodules | — | `git submodule update --init` (needed once) |
+
 ### Build steps
+
+#### Linux / macOS
 
 Run the build script from this directory:
 
@@ -65,20 +102,7 @@ Run the build script from this directory:
 bash jextract_vector_simd.sh [buildtype]
 ```
 
-The `buildtype` parameter is optional and defaults to `release`. Valid values are:
-- `release` (default) - Optimized build with no debug symbols
-- `debug` - Unoptimized build with debug symbols (`-g -O0`)
-- `debugoptimized` - Optimized build with debug symbols (`-g -O2`)
-
-The script:
-1. Verifies prerequisites (g++, meson, ninja, Highway submodule).
-2. Runs `meson setup ../../../target/meson-build --wipe --buildtype=<buildtype>` then `meson compile`.
-3. Copies the versioned `.so` to `../resources/libjvector.so` where the Java
-   `LibraryLoader` expects it.
-4. Optionally re-generates the Java FFM bindings via `jextract` (only needed
-   when `jvector_simd.h` changes — see [Updating the Java bindings](#updating-the-java-bindings)).
-
-To install all required dependencies automatically (g++, meson, ninja) and then build, pass `--auto-install-deps`:
+To install all required dependencies automatically (g++, meson, ninja) and then build on Linux, pass `--auto-install-deps`:
 
 ```bash
 bash jextract_vector_simd.sh --auto-install-deps
@@ -88,15 +112,42 @@ This is the easiest way to get started on a fresh Ubuntu machine. For other
 distributions the script will print an error indicating which install commands
 need to be added.
 
-To build without regenerating bindings (e.g. when `jextract` is not installed):
+#### Windows
 
-```bash
-bash jextract_vector_simd.sh   # jextract step is skipped with a warning if not found
+Run the PowerShell script from a **Visual Studio Developer PowerShell** (so that
+`cl.exe` is on `PATH` and Meson auto-detects MSVC):
+
+```powershell
+.\build_windows.ps1 [release|debug|debugoptimized]
 ```
+
+To use clang++ instead of MSVC, set `$env:CXX = 'clang++'` before running.
+
+---
+
+The `buildtype` parameter is optional and defaults to `release`. Valid values are:
+- `release` (default) - Optimized build with no debug symbols
+- `debug` - Unoptimized build with debug symbols (`-g -O0`)
+- `debugoptimized` - Optimized build with debug symbols (`-g -O2`)
+
+Both scripts:
+1. Verify prerequisites (compiler, meson, ninja, Highway submodule).
+2. Run `meson setup ../../../target/meson-build --wipe --buildtype=<buildtype>` then `meson compile`.
+3. Copy the output library to `../resources/`:
+   - Linux/macOS: `libjvector.so`
+   - Windows: `jvector.dll`
+4. Optionally re-generate the Java FFM bindings via `jextract` (only needed
+   when `jvector_simd.h` changes — see [Updating the Java bindings](#updating-the-java-bindings)).
+
+To build without regenerating bindings, the jextract step is skipped automatically with a warning if `jextract` is not on `PATH`.
 
 ### Building with Maven
 
-From the project root, you can build the native module using Maven:
+From the project root, you can build the native module using Maven. The
+`unix-amd64-profile` activates automatically on Linux/macOS x86-64 (invoking
+`jextract_vector_simd.sh`) and the `windows-amd64-profile` activates
+automatically on Windows x86-64 (invoking `build_windows.ps1` via
+`powershell.exe`).
 
 **Release build (default):**
 ```bash
@@ -118,15 +169,35 @@ The Maven build automatically invokes the `jextract_vector_simd.sh` script with 
 - `debug` - Unoptimized build with debug symbols (`-g -O0`)
 - `debugoptimized` - Optimized build with debug symbols (`-g -O2`)
 
+> **Note (Windows + Maven):** Maven's `exec-maven-plugin` invokes `powershell.exe`
+> directly — no Git Bash or WSL is required.
+> When using MSVC, run Maven from a *Visual Studio Developer PowerShell* so
+> that `cl.exe` is on `PATH` and Meson picks it up automatically.
+> To force clang++, set `$env:CXX = 'clang++'` in your environment before running `mvn`.
+
 ### Manual meson build
 
 ```bash
+# Linux / macOS
 cd jvector-native/src/main/native
 meson setup ../../../target/meson-build --wipe --buildtype=release
 meson compile -C ../../../target/meson-build
 ```
 
-The output is `target/meson-build/libjvector.so.<version>` (relative to the project root).
+```powershell
+# Windows — from a VS Developer PowerShell
+cd jvector-native\src\main\native
+meson setup ..\..\..\target\meson-build --wipe --buildtype=release
+meson compile -C ..\..\..\target\meson-build
+# To use clang++ instead:
+$env:CXX = 'clang++'
+meson setup ..\..\..\target\meson-build --wipe --buildtype=release
+meson compile -C ..\..\..\target\meson-build
+```
+
+The output is:
+- Linux/macOS: `target/meson-build/libjvector.so.<version>`
+- Windows: `target/meson-build/jvector.dll`
 
 ---
 

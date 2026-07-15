@@ -128,7 +128,13 @@ public abstract class VectorizationProvider {
           Constructor<?> ctor = clazz.getConstructor();
           Object instance = ctor.newInstance();
           var provider = (VectorizationProvider) instance;
-          LOG.info("Native Vector API enabled. Using NativeVectorizationProvider.");
+          try {
+            String isa = (String) provider.getVectorUtilSupport()
+                .getClass().getMethod("getActiveIsa").invoke(provider.getVectorUtilSupport());
+            LOG.info("Native Vector API enabled. Using NativeVectorizationProvider. Highway ISA tier: " + isa);
+          } catch (Exception e) {
+            LOG.info("Native Vector API enabled. Using NativeVectorizationProvider. (Unable to determine Highway ISA tier)");
+          }
           return provider;
         } catch (UnsupportedOperationException uoe) {
           LOG.warning("Native vector API was not enabled. " + uoe.getMessage());

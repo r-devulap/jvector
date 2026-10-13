@@ -115,3 +115,6 @@ sift1m-128-euclidean-int8:
 wikipedia-2023-11-en-mxbai-int8-1m:
   similarity_function: DOT_PRODUCT
   load_behavior: NO_SCRUB
+wiki-multilingual-v3-int8-1m:
+  similarity_function: DOT_PRODUCT
+  load_behavior: NO_SCRUB

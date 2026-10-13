@@ -48,3 +48,7 @@ wikipedia-2023-11-en-mxbai-int8-1m:
   base: /home/ubuntu/dataset_cache/int8-datasets/processed/wikipedia-2023-11-en-mxbai-int8-1m/wikipedia_2023_11_en_mxbai_int8_base_987060.bvecs
   query: /home/ubuntu/dataset_cache/int8-datasets/processed/wikipedia-2023-11-en-mxbai-int8-1m/wikipedia_2023_11_en_mxbai_int8_query_10000.bvecs
   gt: /home/ubuntu/dataset_cache/int8-datasets/processed/wikipedia-2023-11-en-mxbai-int8-1m/wikipedia_2023_11_en_mxbai_int8_gt_ip_100.ivecs
+wiki-multilingual-v3-int8-1m:
+  base: /home/ubuntu/dataset_cache/int8-datasets/processed/wiki-multilingual-v3-int8-1m/wiki_multilingual_v3_int8_base_999158.bvecs
+  query: /home/ubuntu/dataset_cache/int8-datasets/processed/wiki-multilingual-v3-int8-1m/wiki_multilingual_v3_int8_query_10000.bvecs
+  gt: /home/ubuntu/dataset_cache/int8-datasets/processed/wiki-multilingual-v3-int8-1m/wiki_multilingual_v3_int8_gt_ip_100.ivecs

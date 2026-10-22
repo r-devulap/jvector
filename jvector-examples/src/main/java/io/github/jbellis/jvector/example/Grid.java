@@ -252,11 +252,9 @@ public class Grid {
             VectorCompressor<?> buildCompressorObj = null;
             String buildQuantType = null;
 
-            if (buildCompressor != null) {
-                if (ds instanceof ByteDataSet) {
-                    throw new UnsupportedOperationException(
-                            "Build-time compression is not yet supported for int8 dataset '" + ds.getName() + "'");
-                }
+            // Int8 datasets only support compression type "None" (enforced by MultiConfig.validateForInt8Dataset),
+            // so there is no build compressor for them.
+            if (buildCompressor != null && !(ds instanceof ByteDataSet)) {
                 var floatDs = (DataSet) ds;
                 var buildParams = buildCompressor.apply(floatDs);
                 buildQuantType = quantTypeOf(buildParams); // "PQ", "BQ", or null

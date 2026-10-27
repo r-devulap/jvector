@@ -1335,6 +1335,130 @@ public class NativeSimdOps {
         }
     }
 
+    private static class dot_product_batch_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG,
+            NativeSimdOps.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("dot_product_batch_f32");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void dot_product_batch_f32(const float *query, const float *base, size_t length, const int *ordinals, size_t count, float *out)
+     * }
+     */
+    public static FunctionDescriptor dot_product_batch_f32$descriptor() {
+        return dot_product_batch_f32.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void dot_product_batch_f32(const float *query, const float *base, size_t length, const int *ordinals, size_t count, float *out)
+     * }
+     */
+    public static MethodHandle dot_product_batch_f32$handle() {
+        return dot_product_batch_f32.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void dot_product_batch_f32(const float *query, const float *base, size_t length, const int *ordinals, size_t count, float *out)
+     * }
+     */
+    public static MemorySegment dot_product_batch_f32$address() {
+        return dot_product_batch_f32.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void dot_product_batch_f32(const float *query, const float *base, size_t length, const int *ordinals, size_t count, float *out)
+     * }
+     */
+    public static void dot_product_batch_f32(MemorySegment query, MemorySegment base, long length, MemorySegment ordinals, long count, MemorySegment out) {
+        var mh$ = dot_product_batch_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("dot_product_batch_f32", query, base, length, ordinals, count, out);
+            }
+            mh$.invokeExact(query, base, length, ordinals, count, out);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class euclidean_batch_f32 {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG,
+            NativeSimdOps.C_POINTER,
+            NativeSimdOps.C_LONG,
+            NativeSimdOps.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = NativeSimdOps.findOrThrow("euclidean_batch_f32");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC, Linker.Option.critical(true));
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void euclidean_batch_f32(const float *query, const float *base, size_t length, const int *ordinals, size_t count, float *out)
+     * }
+     */
+    public static FunctionDescriptor euclidean_batch_f32$descriptor() {
+        return euclidean_batch_f32.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void euclidean_batch_f32(const float *query, const float *base, size_t length, const int *ordinals, size_t count, float *out)
+     * }
+     */
+    public static MethodHandle euclidean_batch_f32$handle() {
+        return euclidean_batch_f32.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void euclidean_batch_f32(const float *query, const float *base, size_t length, const int *ordinals, size_t count, float *out)
+     * }
+     */
+    public static MemorySegment euclidean_batch_f32$address() {
+        return euclidean_batch_f32.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void euclidean_batch_f32(const float *query, const float *base, size_t length, const int *ordinals, size_t count, float *out)
+     * }
+     */
+    public static void euclidean_batch_f32(MemorySegment query, MemorySegment base, long length, MemorySegment ordinals, long count, MemorySegment out) {
+        var mh$ = euclidean_batch_f32.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("euclidean_batch_f32", query, base, length, ordinals, count, out);
+            }
+            mh$.invokeExact(query, base, length, ordinals, count, out);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class add_in_place_f32 {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             NativeSimdOps.C_POINTER,

@@ -41,6 +41,7 @@ import org.agrona.collections.IntArrayList;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -471,8 +472,34 @@ public class OnHeapGraphIndex implements MutableGraphIndex {
 
         }
 
+        // Scratch space for the bulk path. A View is used by one thread at a time, so this needs no synchronization.
+        private int[] bulkNodes = new int[0];
+        private float[] bulkScores = new float[0];
+
         @Override
         public void processNeighbors(int level, int node, ScoreFunction scoreFunction, IntMarker visited, NeighborProcessor neighborProcessor) {
+            if (scoreFunction.supportsBulkSimilarity()) {
+                // gather the unvisited neighbors, then score them with a single call
+                int n = 0;
+                for (var it = getNeighborsIterator(level, node); it.hasNext(); ) {
+                    var friendOrd = it.nextInt();
+                    if (visited.mark(friendOrd)) {
+                        if (n == bulkNodes.length) {
+                            bulkNodes = Arrays.copyOf(bulkNodes, Math.max(64, n * 2));
+                            bulkScores = new float[bulkNodes.length];
+                        }
+                        bulkNodes[n++] = friendOrd;
+                    }
+                }
+                if (n > 0) {
+                    scoreFunction.similarityToBulk(bulkNodes, n, bulkScores);
+                    for (int i = 0; i < n; i++) {
+                        neighborProcessor.process(bulkNodes[i], bulkScores[i]);
+                    }
+                }
+                return;
+            }
+
             for (var it = getNeighborsIterator(level, node); it.hasNext(); ) {
                 var friendOrd = it.nextInt();
                 if (visited.mark(friendOrd)) {

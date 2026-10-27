@@ -359,6 +359,27 @@ HWY_FLATTEN float euclidean_f32(
     return L2SquareDistance(a, aoffset, b, boffset, length);
 }
 
+// Batched variants: score one query against `count` vectors that live contiguously in `base`
+// (vector i starts at base + ordinals[i] * length).  A single call replaces `count` separate
+// downcalls, which amortizes the Java->native transition for short vectors.
+HWY_FLATTEN void dot_product_batch_f32(
+        const float *query, const float *base, size_t length,
+        const int *ordinals, size_t count, float *out)
+{
+    for (size_t i = 0; i < count; i++) {
+        out[i] = DotProduct(query, 0, base + static_cast<size_t>(ordinals[i]) * length, 0, length);
+    }
+}
+
+HWY_FLATTEN void euclidean_batch_f32(
+        const float *query, const float *base, size_t length,
+        const int *ordinals, size_t count, float *out)
+{
+    for (size_t i = 0; i < count; i++) {
+        out[i] = L2SquareDistance(query, 0, base + static_cast<size_t>(ordinals[i]) * length, 0, length);
+    }
+}
+
 // =============================================================================
 // Element-wise in-place arithmetic and reduction kernels
 // =============================================================================

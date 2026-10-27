@@ -578,7 +578,11 @@ public class Grid {
         var floatVectors = ds.getBaseRavv();
         Map<Set<FeatureId>, ImmutableGraphIndex> indexes = new HashMap<>();
         long start;
-        var bsp = BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.getSimilarityFunction());
+        // On by default: copies the vectors into one contiguous array so that construction can score a node's
+        // neighbors with a single native call. Disable with -Djvector.bulk_exact_scoring=false (e.g. to save memory).
+        var bsp = Boolean.parseBoolean(System.getProperty("jvector.bulk_exact_scoring", "true"))
+                ? BuildScoreProvider.contiguousRandomAccessScoreProvider(floatVectors, ds.getSimilarityFunction())
+                : BuildScoreProvider.randomAccessScoreProvider(floatVectors, ds.getSimilarityFunction());
         GraphIndexBuilder builder = new GraphIndexBuilder(bsp,
                                                           floatVectors.dimension(),
                                                           M,

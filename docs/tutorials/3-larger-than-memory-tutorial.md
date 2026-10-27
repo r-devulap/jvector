@@ -186,3 +186,4 @@ mvn compile exec:exec@tutorial -Dtutorial=ltm -pl jvector-examples -am
 
 - Fused PQ
 - NVQ
+- [Bulk scoring](./4-bulk-scoring-tutorial.md)

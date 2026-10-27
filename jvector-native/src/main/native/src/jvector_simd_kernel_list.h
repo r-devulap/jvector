@@ -37,6 +37,9 @@
     KERNEL_ENTRY(float, cosine_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
     KERNEL_ENTRY(float, dot_product_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
     KERNEL_ENTRY(float, euclidean_f32, (const float *a, size_t aoffset, const float *b, size_t boffset, size_t length), (a, aoffset, b, boffset, length)) \
+    /* Batched similarity: one query against n vectors stored contiguously (vector i at base + ordinals[i] * length) */ \
+    KERNEL_ENTRY(void, dot_product_batch_f32, (const float *query, const float *base, size_t length, const int *ordinals, size_t count, float *out), (query, base, length, ordinals, count, out)) \
+    KERNEL_ENTRY(void, euclidean_batch_f32, (const float *query, const float *base, size_t length, const int *ordinals, size_t count, float *out), (query, base, length, ordinals, count, out)) \
     /* Element-wise in-place arithmetic */ \
     KERNEL_ENTRY(void, add_in_place_f32, (float *v1, const float *v2, size_t length), (v1, v2, length)) \
     KERNEL_ENTRY(void, add_scalar_in_place_f32, (float *v1, float value, size_t length), (v1, value, length)) \

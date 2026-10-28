@@ -144,6 +144,21 @@ public final class VectorUtil {
     return impl.tryUpdateKMeansDistances(points, centroid, minima, scratch);
   }
 
+  /**
+   * Computes the squared L2 distance between {@code query} and each of {@code count} vectors stored contiguously
+   * in {@code base} (vector i starts at {@code ordinals[i] * length}), writing the results to {@code out[0..count)}.
+   */
+  public static void squareL2DistanceBatch(VectorFloat<?> query, VectorFloat<?> base, int length, int[] ordinals, int count, float[] out) {
+    impl.squareDistanceBatch(query, base, length, ordinals, count, out);
+  }
+
+  /**
+   * Dot product counterpart of {@link #squareL2DistanceBatch(VectorFloat, VectorFloat, int, int[], int, float[])}.
+   */
+  public static void dotProductBatch(VectorFloat<?> query, VectorFloat<?> base, int length, int[] ordinals, int count, float[] out) {
+    impl.dotProductBatch(query, base, length, ordinals, count, out);
+  }
+
   private static boolean centroidDistancesAreFinite(VectorFloat<?> point, int pointOffset,
                                                     VectorFloat<?> centroids, int centroidCount, int dimension) {
     for (int i = 0; i < centroidCount; i++) {

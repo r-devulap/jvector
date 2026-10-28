@@ -175,6 +175,132 @@ public interface BuildScoreProvider {
     }
 
     /**
+     * Like {@link #randomAccessScoreProvider(RandomAccessVectorValues, VectorSimilarityFunction)}, but copies all
+     * vectors into one contiguous array so that the search-phase score function can score many neighbors with a
+     * single call ({@link ScoreFunction#similarityToBulk}). With the native provider this replaces one
+     * Java-to-native transition per neighbor with one per batch, which matters for short vectors.
+     * <p>
+     * Costs one extra copy of the vectors in memory. The RAVV must be dense and must not change after this call.
+     * Falls back to the plain provider when the vectors do not fit in one array.
+     */
+    static BuildScoreProvider contiguousRandomAccessScoreProvider(RandomAccessVectorValues ravv, VectorSimilarityFunction similarityFunction) {
+        var plain = randomAccessScoreProvider(ravv, similarityFunction);
+        final int dim = ravv.dimension();
+        final long total = (long) ravv.size() * dim;
+        if (total > Integer.MAX_VALUE - 16) {
+            return plain;
+        }
+
+        final VectorFloat<?> slab = vts.createFloatVector((int) total);
+        final var vectors = ravv.threadLocalSupplier();
+        var source = vectors.get();
+        for (int i = 0; i < ravv.size(); i++) {
+            slab.copyFrom(source.getVector(i), 0, i * dim, dim);
+        }
+        final boolean euclidean = similarityFunction == VectorSimilarityFunction.EUCLIDEAN;
+        final boolean cosine = similarityFunction == VectorSimilarityFunction.COSINE;
+
+        // For cosine, precompute per-vector L2 norms so the batch path avoids re-computing them.
+        final float[] baseNorms;
+        if (cosine) {
+            baseNorms = new float[ravv.size()];
+            for (int i = 0; i < ravv.size(); i++) {
+                float norm = 0f;
+                int base = i * dim;
+                for (int j = 0; j < dim; j++) {
+                    float v = slab.get(base + j);
+                    norm += v * v;
+                }
+                baseNorms[i] = (float) Math.sqrt(norm);
+            }
+        } else {
+            baseNorms = null;
+        }
+
+        return new BuildScoreProvider() {
+            @Override
+            public boolean isExact() {
+                return true;
+            }
+
+            @Override
+            public VectorFloat<?> approximateCentroid() {
+                return plain.approximateCentroid();
+            }
+
+            @Override
+            public SearchScoreProvider searchProviderFor(VectorFloat<?> vector) {
+                // Compute query norm once for the lifetime of this score function (cosine only).
+                final float queryNorm;
+                if (cosine) {
+                    float n = 0f;
+                    for (int j = 0; j < vector.length(); j++) {
+                        float v = vector.get(j);
+                        n += v * v;
+                    }
+                    queryNorm = (float) Math.sqrt(n);
+                } else {
+                    queryNorm = 0f;
+                }
+
+                var sf = new ScoreFunction.ExactScoreFunction() {
+                    @Override
+                    public float similarityTo(int node2) {
+                        if (euclidean) {
+                            return 1 / (1 + VectorUtil.squareL2Distance(vector, 0, slab, node2 * dim, dim));
+                        } else if (cosine) {
+                            return (1 + VectorUtil.dotProduct(vector, 0, slab, node2 * dim, dim) / (queryNorm * baseNorms[node2])) / 2;
+                        } else {
+                            return (1 + VectorUtil.dotProduct(vector, 0, slab, node2 * dim, dim)) / 2;
+                        }
+                    }
+
+                    @Override
+                    public boolean supportsBulkSimilarity() {
+                        return true;
+                    }
+
+                    @Override
+                    public void similarityToBulk(int[] nodes, int count, float[] out) {
+                        if (euclidean) {
+                            VectorUtil.squareL2DistanceBatch(vector, slab, dim, nodes, count, out);
+                            for (int i = 0; i < count; i++) {
+                                out[i] = 1 / (1 + out[i]);
+                            }
+                        } else if (cosine) {
+                            VectorUtil.cosineBatch(vector, queryNorm, slab, baseNorms, dim, nodes, count, out);
+                            for (int i = 0; i < count; i++) {
+                                out[i] = (1 + out[i]) / 2;
+                            }
+                        } else {
+                            VectorUtil.dotProductBatch(vector, slab, dim, nodes, count, out);
+                            for (int i = 0; i < count; i++) {
+                                out[i] = (1 + out[i]) / 2;
+                            }
+                        }
+                    }
+                };
+                return new DefaultSearchScoreProvider(sf);
+            }
+
+            @Override
+            public SearchScoreProvider searchProviderFor(int node1) {
+                return searchProviderFor(vectors.get().getVector(node1));
+            }
+
+            @Override
+            public SearchScoreProvider diversityProviderFor(int node1) {
+                return plain.diversityProviderFor(node1);
+            }
+
+            @Override
+            public ScoreFunction diversityScoreFunctionFor(int node1) {
+                return plain.diversityScoreFunctionFor(node1);
+            }
+        };
+    }
+
+    /**
      * Returns a BSP that performs approximate score comparisons using the given PQVectors,
      * with reranking performed using RandomAccessVectorValues (which is intended to be
      * InlineVectorValues for building incrementally, but should technically

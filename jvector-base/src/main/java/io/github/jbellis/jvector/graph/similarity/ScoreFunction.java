@@ -59,6 +59,25 @@ public interface ScoreFunction {
     default void enableSimilarityToNeighbors(int origin) {}
 
     /**
+     * @return true if {@link #similarityToBulk} is worth calling instead of looping over {@link #similarityTo}.
+     * Callers that gather several nodes before scoring them should check this first, since gathering has a cost
+     * that is only repaid by implementations that amortize per-call overhead.
+     */
+    default boolean supportsBulkSimilarity() {
+        return false;
+    }
+
+    /**
+     * Computes the similarity to each of the first {@code count} entries of {@code nodes}, writing the results
+     * to the corresponding entries of {@code out}. Equivalent to calling {@link #similarityTo} on each node.
+     */
+    default void similarityToBulk(int[] nodes, int count, float[] out) {
+        for (int i = 0; i < count; i++) {
+            out[i] = similarityTo(nodes[i]);
+        }
+    }
+
+    /**
      * @return true if `similarityToNeighbor` is supported
      */
     default boolean supportsSimilarityToNeighbors() {

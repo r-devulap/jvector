@@ -265,6 +265,26 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
     }
 
     @Override
+    public void squareDistanceBatch(VectorFloat<?> query, VectorFloat<?> base, int length, int[] ordinals, int count, float[] out) {
+        NativeSimdOps.euclidean_batch_f32(((MemorySegmentVectorFloat) query).get(),
+                                          ((MemorySegmentVectorFloat) base).get(),
+                                          length,
+                                          MemorySegment.ofArray(ordinals),
+                                          count,
+                                          MemorySegment.ofArray(out));
+    }
+
+    @Override
+    public void dotProductBatch(VectorFloat<?> query, VectorFloat<?> base, int length, int[] ordinals, int count, float[] out) {
+        NativeSimdOps.dot_product_batch_f32(((MemorySegmentVectorFloat) query).get(),
+                                            ((MemorySegmentVectorFloat) base).get(),
+                                            length,
+                                            MemorySegment.ofArray(ordinals),
+                                            count,
+                                            MemorySegment.ofArray(out));
+    }
+
+    @Override
     public float cosine(VectorFloat<?> v1, VectorFloat<?> v2) {
         return NativeSimdOps.cosine_f32(((MemorySegmentVectorFloat) v1).get(), 0,
                                        ((MemorySegmentVectorFloat) v2).get(), 0,

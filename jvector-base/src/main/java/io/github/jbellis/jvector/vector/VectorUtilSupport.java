@@ -96,6 +96,43 @@ public interface VectorUtilSupport {
     return false;
   }
 
+  /**
+   * Computes the sum of squared differences between {@code query} and each of {@code count} vectors stored
+   * contiguously in {@code base}: vector i starts at {@code ordinals[i] * length}. Results go to {@code out[0..count)}.
+   * Implementations may override this to amortize per-call overhead; the default loops over
+   * {@link #squareDistance(VectorFloat, int, VectorFloat, int, int)}.
+   */
+  default void squareDistanceBatch(VectorFloat<?> query, VectorFloat<?> base, int length, int[] ordinals, int count, float[] out) {
+    for (int i = 0; i < count; i++) {
+      out[i] = squareDistance(query, 0, base, ordinals[i] * length, length);
+    }
+  }
+
+  /**
+   * Dot product counterpart of {@link #squareDistanceBatch(VectorFloat, VectorFloat, int, int[], int, float[])}.
+   */
+  default void dotProductBatch(VectorFloat<?> query, VectorFloat<?> base, int length, int[] ordinals, int count, float[] out) {
+    for (int i = 0; i < count; i++) {
+      out[i] = dotProduct(query, 0, base, ordinals[i] * length, length);
+    }
+  }
+
+  /**
+   * Cosine similarity counterpart of {@link #squareDistanceBatch(VectorFloat, VectorFloat, int, int[], int, float[])}.
+   * {@code baseNorms[ordinals[i]]} must hold the precomputed L2 norm of vector i in {@code base}.
+   * {@code queryNorm} must hold the precomputed L2 norm of {@code query}.
+   * Implementations may override this to amortize per-call overhead; the default uses the precomputed
+   * norms with a raw dot product to avoid recomputing them per entry.
+   */
+  default void cosineBatch(VectorFloat<?> query, float queryNorm, VectorFloat<?> base, float[] baseNorms,
+                           int length, int[] ordinals, int count, float[] out) {
+    for (int i = 0; i < count; i++) {
+      int ord = ordinals[i];
+      float dot = dotProduct(query, 0, base, ord * length, length);
+      out[i] = dot / (queryNorm * baseNorms[ord]);
+    }
+  }
+
   /** returns the sum of the given vectors. */
   VectorFloat<?> sum(List<VectorFloat<?>> vectors);
 

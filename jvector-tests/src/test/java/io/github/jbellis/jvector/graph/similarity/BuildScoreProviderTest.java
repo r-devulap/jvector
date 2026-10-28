@@ -69,4 +69,55 @@ public class BuildScoreProviderTest {
         var dsp0 = bsp.diversityProviderFor(0);
         assertEquals(vsf.compare(vectors.get(2), vectors.get(0)), dsp0.exactScoreFunction().similarityTo(1), 1e-6f);
     }
+
+    /**
+     * The contiguous provider's bulk and single-node scoring must match the plain provider, for lengths that
+     * exercise the capped (<=4, <=8) kernels, the full-width kernel and a tail.
+     */
+    @Test
+    public void testContiguousProviderMatchesPlain() {
+        var rnd = new java.util.Random(42);
+        for (var vsf : new VectorSimilarityFunction[]{VectorSimilarityFunction.EUCLIDEAN, VectorSimilarityFunction.DOT_PRODUCT}) {
+            for (int dim : new int[]{3, 8, 16, 37, 128}) {
+                final int n = 50;
+                final List<VectorFloat<?>> vectors = new ArrayList<>();
+                for (int i = 0; i < n; i++) {
+                    float[] v = new float[dim];
+                    for (int j = 0; j < dim; j++) {
+                        v[j] = rnd.nextFloat() - 0.5f;
+                    }
+                    vectors.add(vts.createFloatVector(v));
+                }
+                var ravv = new ListRandomAccessVectorValues(vectors, dim);
+
+                var plain = BuildScoreProvider.randomAccessScoreProvider(ravv, vsf);
+                var contiguous = BuildScoreProvider.contiguousRandomAccessScoreProvider(ravv, vsf);
+
+                // deliberately unsorted and with a repeat
+                int[] nodes = {7, 0, 49, 23, 23, 1, 48, 12};
+                float[] bulk = new float[nodes.length];
+                for (int query : new int[]{0, 5, 49}) {
+                    var expected = plain.searchProviderFor(query).scoreFunction();
+                    var sf = contiguous.searchProviderFor(query).scoreFunction();
+                    assertEquals(true, sf.supportsBulkSimilarity());
+                    sf.similarityToBulk(nodes, nodes.length, bulk);
+                    for (int i = 0; i < nodes.length; i++) {
+                        String msg = vsf + " dim=" + dim + " query=" + query + " node=" + nodes[i];
+                        assertEquals(msg, expected.similarityTo(nodes[i]), bulk[i], 1e-5f);
+                        assertEquals(msg, expected.similarityTo(nodes[i]), sf.similarityTo(nodes[i]), 1e-5f);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testContiguousProviderFallsBackForCosine() {
+        final List<VectorFloat<?>> vectors = new ArrayList<>();
+        vectors.add(vts.createFloatVector(new float[]{1.0f, 0.0f}));
+        vectors.add(vts.createFloatVector(new float[]{0.0f, 1.0f}));
+        var ravv = new ListRandomAccessVectorValues(vectors, 2);
+        var bsp = BuildScoreProvider.contiguousRandomAccessScoreProvider(ravv, VectorSimilarityFunction.COSINE);
+        assertEquals(false, bsp.searchProviderFor(0).scoreFunction().supportsBulkSimilarity());
+    }
 }

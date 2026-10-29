@@ -77,7 +77,7 @@ public class BuildScoreProviderTest {
     @Test
     public void testContiguousProviderMatchesPlain() {
         var rnd = new java.util.Random(42);
-        for (var vsf : new VectorSimilarityFunction[]{VectorSimilarityFunction.EUCLIDEAN, VectorSimilarityFunction.DOT_PRODUCT}) {
+        for (var vsf : VectorSimilarityFunction.values()) {
             for (int dim : new int[]{3, 8, 16, 37, 128}) {
                 final int n = 50;
                 final List<VectorFloat<?>> vectors = new ArrayList<>();
@@ -112,12 +112,12 @@ public class BuildScoreProviderTest {
     }
 
     @Test
-    public void testContiguousProviderFallsBackForCosine() {
+    public void testContiguousProviderSupportsBulkForCosine() {
         final List<VectorFloat<?>> vectors = new ArrayList<>();
         vectors.add(vts.createFloatVector(new float[]{1.0f, 0.0f}));
         vectors.add(vts.createFloatVector(new float[]{0.0f, 1.0f}));
         var ravv = new ListRandomAccessVectorValues(vectors, 2);
         var bsp = BuildScoreProvider.contiguousRandomAccessScoreProvider(ravv, VectorSimilarityFunction.COSINE);
-        assertEquals(false, bsp.searchProviderFor(0).scoreFunction().supportsBulkSimilarity());
+        assertEquals(true, bsp.searchProviderFor(0).scoreFunction().supportsBulkSimilarity());
     }
 }

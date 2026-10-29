@@ -117,6 +117,22 @@ public interface VectorUtilSupport {
     }
   }
 
+  /**
+   * Cosine similarity counterpart of {@link #squareDistanceBatch(VectorFloat, VectorFloat, int, int[], int, float[])}.
+   * {@code baseNorms[ordinals[i]]} must hold the precomputed L2 norm of vector i in {@code base}.
+   * {@code queryNorm} must hold the precomputed L2 norm of {@code query}.
+   * Implementations may override this to amortize per-call overhead; the default uses the precomputed
+   * norms with a raw dot product to avoid recomputing them per entry.
+   */
+  default void cosineBatch(VectorFloat<?> query, float queryNorm, VectorFloat<?> base, float[] baseNorms,
+                           int length, int[] ordinals, int count, float[] out) {
+    for (int i = 0; i < count; i++) {
+      int ord = ordinals[i];
+      float dot = dotProduct(query, 0, base, ord * length, length);
+      out[i] = dot / (queryNorm * baseNorms[ord]);
+    }
+  }
+
   /** returns the sum of the given vectors. */
   VectorFloat<?> sum(List<VectorFloat<?>> vectors);
 

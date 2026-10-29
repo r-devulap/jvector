@@ -77,6 +77,15 @@ public final class VectorUtil {
   }
 
   /**
+   * Returns the cosine similarity between subvectors of the given length.
+   */
+  public static float cosine(VectorFloat<?> a, int aoffset, VectorFloat<?> b, int boffset, int length) {
+    float r = impl.cosine(a, aoffset, b, boffset, length);
+    assert Float.isFinite(r);
+    return r;
+  }
+
+  /**
    * Returns the sum of squared differences of the two vectors.
    *
    * @throws IllegalArgumentException if the vectors' dimensions differ.
@@ -157,6 +166,16 @@ public final class VectorUtil {
    */
   public static void dotProductBatch(VectorFloat<?> query, VectorFloat<?> base, int length, int[] ordinals, int count, float[] out) {
     impl.dotProductBatch(query, base, length, ordinals, count, out);
+  }
+
+  /**
+   * Cosine similarity counterpart of {@link #squareL2DistanceBatch(VectorFloat, VectorFloat, int, int[], int, float[])}.
+   * {@code baseNorms[ordinals[i]]} must hold the precomputed L2 norm of vector i in {@code base}.
+   * {@code queryNorm} must hold the precomputed L2 norm of {@code query}.
+   */
+  public static void cosineBatch(VectorFloat<?> query, float queryNorm, VectorFloat<?> base, float[] baseNorms,
+                                 int length, int[] ordinals, int count, float[] out) {
+    impl.cosineBatch(query, queryNorm, base, baseNorms, length, ordinals, count, out);
   }
 
   private static boolean centroidDistancesAreFinite(VectorFloat<?> point, int pointOffset,

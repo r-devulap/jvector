@@ -1,0 +1,26 @@
+yamlSchemaVersion: 1
+onDiskIndexVersion: 6
+
+dataset: e5-small-v2-100k
+useDatasetPrefetching: false
+
+construction:
+  outDegree: [32]
+  efConstruction: [100]
+  neighborOverflow: [1.2f]
+  addHierarchy: [Yes]
+  refineFinalGraph: [Yes]
+  fusedGraph: [No]
+  compression:
+    - type: None
+  reranking:
+    - FP
+  useSavedIndexIfExists: No
+
+search:
+  topKOverquery:
+    10: [1.0, 2.0, 5.0, 10.0]
+    100: [1.0, 2.0]
+  useSearchPruning: [Yes]
+  compression:
+    - type: None

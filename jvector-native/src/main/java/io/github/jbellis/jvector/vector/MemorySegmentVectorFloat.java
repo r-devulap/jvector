@@ -207,4 +207,15 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
         Object current = segment;
         return current instanceof float[] data ? data : (float[]) ((MemorySegment) current).heapBase().get();
     }
+
+    /**
+     * Returns the backing float[] if the vector has never been accessed as a MemorySegment
+     * (i.e. native access has never been requested), otherwise returns null.
+     * Used by NativeVectorUtilSupport.usePanama to pick the fromArray fast path
+     * over fromMemorySegment on the SIMD hot path.
+     */
+    float[] arrayIfUnpromoted() {
+        Object current = STORAGE.get(this);
+        return current instanceof float[] data ? data : null;
+    }
 }

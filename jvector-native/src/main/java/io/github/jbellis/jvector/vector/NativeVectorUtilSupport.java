@@ -33,6 +33,13 @@ import jdk.incubator.vector.VectorSpecies;
  */
 class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 {
+    /**
+     * For vectors no longer than this many floats the Panama (JVM-intrinsic) kernels beat the native
+     * ones because the JNI call overhead dominates the actual compute. 512 floats = 2 KiB, which is
+     * well within L1 cache and small enough that even a single AVX-512 pass finishes in nanoseconds.
+     */
+    static final int PANAMA_THRESHOLD = 512;
+
     public NativeVectorUtilSupport() {}
 
     /** Select once at provider creation; leave the wide scan and its call site unchanged. */
@@ -93,7 +100,11 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     protected FloatVector fromVectorFloat(VectorSpecies<Float> SPEC, VectorFloat<?> vector, int offset) {
-        return FloatVector.fromMemorySegment(SPEC, ((MemorySegmentVectorFloat) vector).get(), vector.offset(offset), ByteOrder.LITTLE_ENDIAN);
+        MemorySegmentVectorFloat msv = (MemorySegmentVectorFloat) vector;
+        float[] arr = msv.arrayIfUnpromoted();
+        if (arr != null)
+            return FloatVector.fromArray(SPEC, arr, offset);
+        return FloatVector.fromMemorySegment(SPEC, msv.get(), vector.offset(offset), ByteOrder.LITTLE_ENDIAN);
     }
 
     @Override
@@ -103,7 +114,12 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     protected void intoVectorFloat(FloatVector vector, VectorFloat<?> v, int offset) {
-        vector.intoMemorySegment(((MemorySegmentVectorFloat) v).get(), v.offset(offset), ByteOrder.LITTLE_ENDIAN);
+        MemorySegmentVectorFloat msv = (MemorySegmentVectorFloat) v;
+        float[] arr = msv.arrayIfUnpromoted();
+        if (arr != null)
+            vector.intoArray(arr, offset);
+        else
+            vector.intoMemorySegment(msv.get(), v.offset(offset), ByteOrder.LITTLE_ENDIAN);
     }
 
     @Override
@@ -136,26 +152,46 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public void addInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+        if (v1.length() <= PANAMA_THRESHOLD) {
+            super.addInPlace(v1, v2);
+            return;
+        }
         NativeSimdOps.add_in_place_f32(((MemorySegmentVectorFloat) v1).get(), ((MemorySegmentVectorFloat) v2).get(), v1.length());
     }
 
     @Override
     public void addInPlace(VectorFloat<?> v1, float value) {
+        if (v1.length() <= PANAMA_THRESHOLD) {
+            super.addInPlace(v1, value);
+            return;
+        }
         NativeSimdOps.add_scalar_in_place_f32(((MemorySegmentVectorFloat) v1).get(), value, v1.length());
     }
 
     @Override
     public void scale(VectorFloat<?> vector, float multiplier) {
+        if (vector.length() <= PANAMA_THRESHOLD) {
+            super.scale(vector, multiplier);
+            return;
+        }
         NativeSimdOps.scale_f32(((MemorySegmentVectorFloat) vector).get(), multiplier, vector.length());
     }
 
     @Override
     public void subInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+        if (v1.length() <= PANAMA_THRESHOLD) {
+            super.subInPlace(v1, v2);
+            return;
+        }
         NativeSimdOps.sub_in_place_f32(((MemorySegmentVectorFloat) v1).get(), ((MemorySegmentVectorFloat) v2).get(), v1.length());
     }
 
     @Override
     public void subInPlace(VectorFloat<?> vector, float value) {
+        if (vector.length() <= PANAMA_THRESHOLD) {
+            super.subInPlace(vector, value);
+            return;
+        }
         NativeSimdOps.sub_scalar_in_place_f32(((MemorySegmentVectorFloat) vector).get(), value, vector.length());
     }
 
@@ -171,6 +207,8 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, VectorFloat<?> b, int bOffset, int length) {
+        if (length <= PANAMA_THRESHOLD)
+            return super.sub(a, aOffset, b, bOffset, length);
         Objects.checkFromIndexSize(aOffset, length, a.length());
         Objects.checkFromIndexSize(bOffset, length, b.length());
         VectorFloat<?> res = VectorizationProvider.getInstance().getVectorTypeSupport().createFloatVector(length);
@@ -183,6 +221,8 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public VectorFloat<?> sub(VectorFloat<?> a, int aOffset, float value, int length) {
+        if (length <= PANAMA_THRESHOLD)
+            return super.sub(a, aOffset, value, length);
         Objects.checkFromIndexSize(aOffset, length, a.length());
         VectorFloat<?> res = VectorizationProvider.getInstance().getVectorTypeSupport().createFloatVector(length);
         NativeSimdOps.sub_scalar_f32(
@@ -194,21 +234,31 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public float max(VectorFloat<?> v) {
+        if (v.length() <= PANAMA_THRESHOLD)
+            return super.max(v);
         return NativeSimdOps.max_f32(((MemorySegmentVectorFloat) v).get(), v.length());
     }
 
     @Override
     public float min(VectorFloat<?> v) {
+        if (v.length() <= PANAMA_THRESHOLD)
+            return super.min(v);
         return NativeSimdOps.min_f32(((MemorySegmentVectorFloat) v).get(), v.length());
     }
 
     @Override
     public void minInPlace(VectorFloat<?> v1, VectorFloat<?> v2) {
+        if (v1.length() <= PANAMA_THRESHOLD) {
+            super.minInPlace(v1, v2);
+            return;
+        }
         NativeSimdOps.min_in_place_f32(((MemorySegmentVectorFloat) v1).get(), ((MemorySegmentVectorFloat) v2).get(), v1.length());
     }
 
     @Override
     public float sum(VectorFloat<?> vector) {
+        if (vector.length() <= PANAMA_THRESHOLD)
+            return super.sum(vector);
         return NativeSimdOps.sum_f32(((MemorySegmentVectorFloat) vector).get(), vector.length());
     }
 
@@ -252,6 +302,8 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public float squareDistance(VectorFloat<?> v1, VectorFloat<?> v2) {
+        if (v1.length() <= PANAMA_THRESHOLD)
+            return super.squareDistance(v1, v2);
         return NativeSimdOps.euclidean_f32(((MemorySegmentVectorFloat) v1).get(), 0,
                                           ((MemorySegmentVectorFloat) v2).get(), 0,
                                           v1.length());
@@ -259,6 +311,8 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public float squareDistance(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
+        if (length <= PANAMA_THRESHOLD)
+            return super.squareDistance(v1, v1offset, v2, v2offset, length);
         return NativeSimdOps.euclidean_f32(((MemorySegmentVectorFloat) v1).get(), v1offset,
                                           ((MemorySegmentVectorFloat) v2).get(), v2offset,
                                           length);
@@ -266,6 +320,8 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public float cosine(VectorFloat<?> v1, VectorFloat<?> v2) {
+        if (v1.length() <= PANAMA_THRESHOLD)
+            return super.cosine(v1, v2);
         return NativeSimdOps.cosine_f32(((MemorySegmentVectorFloat) v1).get(), 0,
                                        ((MemorySegmentVectorFloat) v2).get(), 0,
                                        v1.length());
@@ -273,6 +329,8 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public float cosine(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
+        if (length <= PANAMA_THRESHOLD)
+            return super.cosine(v1, v1offset, v2, v2offset, length);
         return NativeSimdOps.cosine_f32(((MemorySegmentVectorFloat) v1).get(), v1offset,
                                        ((MemorySegmentVectorFloat) v2).get(), v2offset,
                                        length);
@@ -280,6 +338,8 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public float dotProduct(VectorFloat<?> v1, VectorFloat<?> v2) {
+        if (v1.length() <= PANAMA_THRESHOLD)
+            return super.dotProduct(v1, v2);
         return NativeSimdOps.dot_product_f32(((MemorySegmentVectorFloat) v1).get(), 0,
                                              ((MemorySegmentVectorFloat) v2).get(), 0,
                                              v1.length());
@@ -287,6 +347,8 @@ class NativeVectorUtilSupport extends PanamaVectorUtilSupport
 
     @Override
     public float dotProduct(VectorFloat<?> v1, int v1offset, VectorFloat<?> v2, int v2offset, int length) {
+        if (length <= PANAMA_THRESHOLD)
+            return super.dotProduct(v1, v1offset, v2, v2offset, length);
         return NativeSimdOps.dot_product_f32(((MemorySegmentVectorFloat) v1).get(), v1offset,
                                              ((MemorySegmentVectorFloat) v2).get(), v2offset,
                                              length);

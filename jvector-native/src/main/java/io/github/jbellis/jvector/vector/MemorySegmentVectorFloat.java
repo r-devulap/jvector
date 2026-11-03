@@ -23,9 +23,6 @@ import io.github.jbellis.jvector.vector.types.VectorFloat;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.nio.Buffer;
 import java.util.Objects;
 
@@ -34,15 +31,6 @@ import java.util.Objects;
  */
 final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment>, FloatArray
 {
-    private static final VarHandle STORAGE;
-    static {
-        try {
-            STORAGE = MethodHandles.lookup().findVarHandle(MemorySegmentVectorFloat.class, "segment", Object.class);
-        } catch (ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
-
     // Reuse the original single reference slot: an array until native access,
     // then its MemorySegment view. The view keeps the same array alive.
     private volatile Object segment;
@@ -86,54 +74,28 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
         }
     }
 
-    // Plain reads may keep the original array after native publication: both states
-    // address the same elements. Heap-segment bounds/base/scope metadata is final.
-    // Retain volatile publication in get() and its single shared-view identity.
+    // The backing array is final and the MemorySegment view (if any) aliases it, so scalar access
+    // always goes straight to the array: no volatile read, no instanceof, no segment bounds math.
     @Override
     public float get(int n)
     {
-        Object current = STORAGE.get(this);
-        if (current instanceof float[] data) {
-            return data[n];
-        }
-        MemorySegment view = (MemorySegment) current;
-        if (n < 0 || n >= view.byteSize() / Float.BYTES) {
-            throw new ArrayIndexOutOfBoundsException(n);
-        }
-        // heapBase() returns an Optional that can escape in scalar callers.
-        return view.getAtIndex(ValueLayout.JAVA_FLOAT, n);
+        return data[n];
     }
 
     @Override
     public void set(int n, float value)
     {
-        Object current = STORAGE.get(this);
-        if (current instanceof float[] data) {
-            data[n] = value;
-        } else {
-            MemorySegment view = (MemorySegment) current;
-            if (n < 0 || n >= view.byteSize() / Float.BYTES) {
-                throw new ArrayIndexOutOfBoundsException(n);
-            }
-            view.setAtIndex(ValueLayout.JAVA_FLOAT, n, value);
-        }
+        data[n] = value;
     }
 
     @Override
     public void zero() {
-        Object current = STORAGE.get(this);
-        if (current instanceof float[] data) {
-            java.util.Arrays.fill(data, 0.0f);
-        } else {
-            ((MemorySegment) current).fill((byte) 0);
-        }
+        java.util.Arrays.fill(data, 0.0f);
     }
 
     @Override
     public int length() {
-        Object current = STORAGE.get(this);
-        return current instanceof float[] data
-                ? data.length : (int) (((MemorySegment) current).byteSize() / Float.BYTES);
+        return data.length;
     }
 
     @Override

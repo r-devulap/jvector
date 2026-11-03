@@ -57,7 +57,7 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     }
 
     MemorySegmentVectorFloat(float[] data) {
-        this.segment = java.util.Objects.requireNonNull(data);
+        this.segment = MemorySegment.ofArray(java.util.Objects.requireNonNull(data));
     }
 
     @Override

@@ -47,10 +47,6 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     // then its MemorySegment view. The view keeps the same array alive.
     private volatile Object segment;
 
-    // The backing array never changes, even after the MemorySegment view is created, so SIMD code can
-    // always use the cheaper fromArray/intoArray path regardless of whether native access has promoted this vector.
-    private final float[] data;
-
     MemorySegmentVectorFloat(int length) {
         this(new float[length]);
     }
@@ -61,8 +57,7 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
     }
 
     MemorySegmentVectorFloat(float[] data) {
-        this.data = java.util.Objects.requireNonNull(data);
-        this.segment = data;
+        this.segment = java.util.Objects.requireNonNull(data);
     }
 
     @Override
@@ -209,6 +204,7 @@ final public class MemorySegmentVectorFloat implements VectorFloat<MemorySegment
 
     @Override
     public float[] array() {
-        return data;
+        Object current = segment;
+        return current instanceof float[] data ? data : (float[]) ((MemorySegment) current).heapBase().get();
     }
 }

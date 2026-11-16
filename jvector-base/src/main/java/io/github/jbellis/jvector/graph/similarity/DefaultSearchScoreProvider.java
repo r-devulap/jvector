@@ -90,15 +90,21 @@ public final class DefaultSearchScoreProvider implements SearchScoreProvider {
      * overhead of the vector kernels (e.g. the native downcall) and lets the loads of independent vectors
      * overlap. Scores are identical either way.
      * <p>
-     * The batch scratch makes {@code similarityToBatch} unsafe for concurrent use of one instance; a
-     * ScoreFunction is created per query and used by one search at a time.
+     * The gather buffer is per thread and reused across queries, not allocated per instance: a score function is
+     * created for every query, and a per-query buffer of count * dimension floats (about 100 KB at 384 dimensions)
+     * costs more in allocation and GC than the batching saves at high QPS. The buffer is only used within a single
+     * {@code similarityToBatch} call, so it is safe to share between score functions on the same thread, and
+     * between threads since each has its own.
      */
     private static final class BatchedExactScoreFunction implements ScoreFunction.ExactScoreFunction {
+        // One buffer per thread, grown on demand and never shrunk. Any dimension can use it, since callers only
+        // address the first count * dimension floats.
+        private static final ThreadLocal<VectorFloat<?>> GATHER_SCRATCH = new ThreadLocal<>();
+
         private final VectorFloat<?> query;
         private final VectorSimilarityFunction vsf;
         private final RandomAccessVectorValues ravv;
         private final int[] graphToRavvOrdMap; // null means identity
-        private VectorFloat<?> gathered;       // lazily allocated, count * dimension floats
 
         BatchedExactScoreFunction(VectorFloat<?> query, VectorSimilarityFunction vsf,
                                   RandomAccessVectorValues ravv, int[] graphToRavvOrdMap) {
@@ -128,9 +134,11 @@ public final class DefaultSearchScoreProvider implements SearchScoreProvider {
             if (ravv.dimension() != dim) {
                 throw new IllegalArgumentException("vector dimensions differ: " + dim + "!=" + ravv.dimension());
             }
+            VectorFloat<?> gathered = GATHER_SCRATCH.get();
             if (gathered == null || gathered.length() < count * dim) {
-                // size for a typical node degree so that growth is rare
+                // size for a typical node degree so that growth is rare; this happens once per thread
                 gathered = vts.createFloatVector(Math.max(count, 64) * dim);
+                GATHER_SCRATCH.set(gathered);
             }
             for (int i = 0; i < count; i++) {
                 ravv.getVectorInto(ordinal(nodes[i]), gathered, i * dim);

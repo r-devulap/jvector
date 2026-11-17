@@ -26,6 +26,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class LazyMemorySegmentTest {
     @Test
+    void lengthIsStableBeforeAndAfterNativeUse() {
+        var v = new MemorySegmentVectorFloat(new float[128]);
+        assertEquals(128, v.length());
+        v.set(5, 1f);
+        v.get(); // publishes the native segment view
+        assertEquals(128, v.length());
+        assertEquals(1f, v.get(5), 0f);
+        assertEquals(0, new MemorySegmentVectorFloat(0).length());
+    }
+
+    @Test
     void scalarReadsAndWritesPreserveBitsAndBoundsBeforeAndAfterNativeUse() {
         float[] data = {-0.0f, Float.intBitsToFloat(0x7fc00123), Float.POSITIVE_INFINITY, 3};
         var v = new MemorySegmentVectorFloat(data);
@@ -48,7 +59,8 @@ class LazyMemorySegmentTest {
         float[] data = {-0.0f, 1, 2, 3, 4, 5, 6, 7};
         var v = new MemorySegmentVectorFloat(data);
         assertSame(data, v.array());
-        assertEquals(1, java.util.Arrays.stream(MemorySegmentVectorFloat.class.getDeclaredFields())
+        // the storage slot plus the cached element count (length() must not chase the segment per call)
+        assertEquals(2, java.util.Arrays.stream(MemorySegmentVectorFloat.class.getDeclaredFields())
                 .filter(f -> !java.lang.reflect.Modifier.isStatic(f.getModifiers())).count());
         var field = MemorySegmentVectorFloat.class.getDeclaredField("segment");
         field.setAccessible(true);

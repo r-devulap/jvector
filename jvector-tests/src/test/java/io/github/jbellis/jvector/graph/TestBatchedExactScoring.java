@@ -51,8 +51,19 @@ public class TestBatchedExactScoring extends RandomizedTest {
         return v;
     }
 
+    /** Exact scores read from the on-disk graph's own vectors. */
     @Test
     public void testSearchMatchesUnbatchedSearch() throws IOException {
+        checkSearchMatchesUnbatchedSearch(false);
+    }
+
+    /** Exact scores read from in-memory vectors, as the benchmarks do. */
+    @Test
+    public void testSearchWithInMemoryVectorsMatchesUnbatchedSearch() throws IOException {
+        checkSearchMatchesUnbatchedSearch(true);
+    }
+
+    private void checkSearchMatchesUnbatchedSearch(boolean inMemoryVectors) throws IOException {
         Random random = getRandom();
         int dim = 33, size = 600, topK = 10;
         for (var vsf : VectorSimilarityFunction.values()) {
@@ -71,8 +82,8 @@ public class TestBatchedExactScoring extends RandomizedTest {
                      var graph = OnDiskGraphIndex.load(readerSupplier);
                      var batchedSearcher = new GraphSearcher(graph);
                      var plainSearcher = new GraphSearcher(graph)) {
-                    var batchedRavv = (RandomAccessVectorValues) batchedSearcher.getView();
-                    var plainRavv = (RandomAccessVectorValues) plainSearcher.getView();
+                    var batchedRavv = inMemoryVectors ? ravv : (RandomAccessVectorValues) batchedSearcher.getView();
+                    var plainRavv = inMemoryVectors ? ravv : (RandomAccessVectorValues) plainSearcher.getView();
                     for (int q = 0; q < 25; q++) {
                         var query = randomVector(random, dim);
 

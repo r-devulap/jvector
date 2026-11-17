@@ -16,6 +16,7 @@
 
 package io.github.jbellis.jvector.graph.similarity;
 
+import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.RandomAccessVectorValues;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import io.github.jbellis.jvector.vector.types.VectorFloat;
@@ -139,6 +140,21 @@ public final class DefaultSearchScoreProvider implements SearchScoreProvider {
                 // size for a typical node degree so that growth is rare; this happens once per thread
                 gathered = vts.createFloatVector(Math.max(count, 64) * dim);
                 GATHER_SCRATCH.set(gathered);
+            }
+            // EXPERIMENT: touch every neighbor's vector before copying any of them. The neighbors are random
+            // vectors in a large set, so the first access to each is a DRAM miss. The loads below are
+            // independent of each other, so the CPU can have several misses in flight at once; the copies that
+            // follow then mostly hit the cache. Only for in-memory vectors: on other sources getVector would
+            // do the whole read a second time.
+            if (ravv instanceof ListRandomAccessVectorValues) {
+                float touched = 0;
+                for (int i = 0; i < count; i++) {
+                    touched += ravv.getVector(ordinal(nodes[i])).get(0);
+                }
+                // A branch that depends on the loaded values keeps the JIT from deleting the loads.
+                if (touched == Float.POSITIVE_INFINITY) {
+                    Thread.onSpinWait();
+                }
             }
             for (int i = 0; i < count; i++) {
                 ravv.getVectorInto(ordinal(nodes[i]), gathered, i * dim);
